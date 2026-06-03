@@ -1,306 +1,598 @@
 /* ============================================
-   MEDICAL EXAM PRACTICE - MAIN JAVASCRIPT
-   (نسخة مع تصليح الإعدادات والإحصائيات والاستئناف)
+   MEDICAL EXAM PRACTICE - FOLDER-BASED VERSION
+   Structure:
+   SubjectName/*.txt                -> Lectures
+   SubjectName/AI/*.txt             -> AI Lectures
+   Years are derived automatically from batch names found inside normal lecture files.
    ============================================ */
 
-// ============================================
-// GLOBAL STATE
-// ============================================
+let subjectCatalog = {};
 let allLectures = [];
 let allYears = [];
+let allAI = [];
 let allQuestions = [];
 let currentExam = null;
 let settings = {};
 let favorites = [];
 let wrongQuestions = [];
 let progress = {};
+let currentQuestionListMode = null;
+let currentSubjectSlug = null;
+let selectionScreenReturnTo = 'subjects';
+let readonlyReturnTo = 'home';
 
-// Selection state
 let selectedGroups = [];
 let currentGroups = [];
 let selectedMode = null;
 let selectedDirection = null;
 let extraTime = 0;
 let extraTimeAdded = false;
+let timerInterval = null;
 
-// ============================================
-// INITIALIZATION
-// ============================================
+const DEFAULT_SETTINGS = {
+    darkMode: false,
+    theme: 'default',
+    sound: 'none',
+    volume: 50,
+    animations: true
+};
+
+const SOUND_MAP = {
+    'fireplace': 'fireplace.mp3',
+    'forest': 'forest.mp3',
+    'rain-window': 'rain-window.mp3',
+    'beach': 'beach.mp3',
+    'irbid-cafe': 'irbid-cafe.mp3',
+    'rain-thunder': 'rain-thunder.mp3'
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
     loadProgress();
     loadFavorites();
     loadWrongQuestions();
-    buildModals();          // بناء المودالات أولاً
-    applySettings();       // تطبيق الإعدادات على الواجهة
-    await loadData();
-    checkResumeExam();     // فحص الامتحان غير المكتمل بعد تحميل البيانات
+    buildModals();
+    applySettings();
     displayRandomQuote();
-    updateStartButtonIcon();
-    
-    // ربط الأزرار التي قد لا تكون ربطت عبر onclick في HTML
     bindButtons();
+    await loadData();
+    checkResumeExam();
 });
 
 function bindButtons() {
-    // نتأكد من وجود أزرار الإعدادات والإحصائيات في الصفحة الرئيسية
     const statsBtn = document.querySelector('.nav-btn--stats');
     const settingsBtn = document.querySelector('.nav-btn--settings');
     if (statsBtn) statsBtn.onclick = toggleStatistics;
     if (settingsBtn) settingsBtn.onclick = toggleSettings;
-    
-    // زر الإعدادات المختصر داخل الامتحان (يتم ربطه لاحقاً عند renderExam)
 }
 
 function displayRandomQuote() {
     const quotes = [
-        "لا توجد وصفة سحرية، ولا توجد طريقة ليس فيها العمل والتعب وبذل الجهد !",
-        "الفشل ليس النهاية، بل هو خطوة ضرورية نحو القمة إذا تعلمت منه !",
-        "العلم الذي تدرسه اليوم هو الأمل الذي ستمنحه لغيرك غداً !",
-        "دراسة الطب هي ماراثون وليست سباقاً قصيراً؛ حافظ على أنفاسك وواصل التقدم !",
-        "لا تنتظر الوقت المناسب، فالوقت لن يكون مثاليًا أبدًا. ابدأ من حيث تقف !"
+        'لا توجد وصفة سحرية، ولا توجد طريقة ليس فيها العمل والتعب وبذل الجهد !',
+        'الفشل ليس النهاية، بل هو خطوة ضرورية نحو القمة إذا تعلمت منه !',
+        'العلم الذي تدرسه اليوم هو الأمل الذي ستمنحه لغيرك غداً !',
+        'دراسة الطب هي ماراثون وليست سباقاً قصيراً؛ حافظ على أنفاسك وواصل التقدم !',
+        'لا تنتظر الوقت المناسب، فالوقت لن يكون مثاليًا أبدًا. ابدأ من حيث تقف !'
     ];
     const quoteEl = document.getElementById('random-quote');
-    if (quoteEl) {
-        const randomIndex = Math.floor(Math.random() * quotes.length);
-        quoteEl.textContent = quotes[randomIndex];
-    }
+    if (quoteEl) quoteEl.textContent = quotes[Math.floor(Math.random() * quotes.length)];
 }
 
-// ============================================
-// DATA LOADING AND PARSING (نفس الكود السابق)
-// ============================================
 async function loadData() {
     try {
-        const [lecturesRes, yearsRes] = await Promise.all([
-            fetch('lectures.txt'),
-            fetch('year.txt')
-        ]);
-        const lecturesText = await lecturesRes.text();
-        const yearsText = await yearsRes.text();
-
-        allLectures = parseFile(lecturesText, 'lecture');
-        allYears = parseFile(yearsText, 'year');
-
-        allQuestions = [];
-        allLectures.forEach(group => {
-            group.questions.forEach(q => {
-                q.source = 'lecture';
-                q.groupName = group.name;
-                allQuestions.push(q);
-            });
-        });
-        allYears.forEach(group => {
-            group.questions.forEach(q => {
-                q.source = 'year';
-                q.groupName = group.name;
-                allQuestions.push(q);
-            });
-        });
-
+        subjectCatalog = await discoverSubjectsFromGitHub();
+        await loadSubjectData();
         populateSearchFilter();
+        renderSubjects();
     } catch (err) {
-        console.error('Error loading data:', err);
-        showToast('Error loading question data. Please check files.');
+        console.error('Error loading repo data:', err);
+        showToast('Error loading subject folders from GitHub.');
     }
 }
 
-function parseFile(text, type) {
-    const groups = [];
-    const sections = text.split('/////').filter(s => s.trim());
+function slugify(str = '') {
+    return String(str)
+        .toLowerCase().trim()
+        .replace(/\.txt$/i, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/[^a-z0-9\-\u0600-\u06FF]/gi, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
 
-    sections.forEach(section => {
-        const lines = section.trim().split('\n');
-        if (lines.length === 0) return;
+function titleCaseSlug(slug = '') {
+    return slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
 
-        const groupName = lines[0].trim();
-        const questionsRaw = lines.slice(1).join('\n');
+function inferGitHubRepo() {
+    const host = window.location.hostname;
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    if (host.endsWith('github.io')) {
+        const owner = host.replace('.github.io', '');
+        const repo = parts.length ? parts[0] : `${owner}.github.io`;
+        return { owner, repo };
+    }
+    const owner = window.GITHUB_REPO_OWNER || '';
+    const repo = window.GITHUB_REPO_NAME || '';
+    if (owner && repo) return { owner, repo };
+    throw new Error('Custom domain detected. Please define window.GITHUB_REPO_OWNER and window.GITHUB_REPO_NAME once in index.html.');
+}
 
-        const questionBlocks = questionsRaw.split('###').filter(q => q.trim());
-        const questions = [];
+async function githubApi(url) {
+    const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } });
+    if (!res.ok) throw new Error(`GitHub API failed: ${res.status}`);
+    return res.json();
+}
 
-        questionBlocks.forEach(block => {
-            const q = parseQuestion(block.trim(), groupName);
-            if (q) questions.push(q);
-        });
+async function discoverSubjectsFromGitHub() {
+    const { owner, repo } = inferGitHubRepo();
+    const repoMeta = await githubApi(`https://api.github.com/repos/${owner}/${repo}`);
+    const branch = repoMeta.default_branch;
+    const treeData = await githubApi(`https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+    const tree = treeData.tree || [];
 
-        if (groupName && questions.length > 0) {
-            groups.push({ name: groupName, type, questions });
+    const catalog = {};
+    tree.forEach(item => {
+        if (item.type !== 'blob' || !/\.txt$/i.test(item.path)) return;
+        const parts = item.path.split('/');
+
+        // SUPPORT ONLY FOLDER-BASED SUBJECTS:
+        // Subject/Lecture1.txt
+        // Subject/AI/Lecture1.txt
+        if (parts.length === 2) {
+            const [subjectFolder, fileName] = parts;
+            if (!fileName.toLowerCase().endsWith('.txt')) return;
+            upsertSubject(catalog, subjectFolder);
+            catalog[slugify(subjectFolder)].lectureFiles.push({
+                path: item.path,
+                fileName,
+                rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${item.path}`
+            });
+        }
+        else if (parts.length === 3 && parts[1].toLowerCase() === 'ai') {
+            const [subjectFolder, _ai, fileName] = parts;
+            if (!fileName.toLowerCase().endsWith('.txt')) return;
+            upsertSubject(catalog, subjectFolder);
+            catalog[slugify(subjectFolder)].aiFiles.push({
+                path: item.path,
+                fileName,
+                rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${item.path}`
+            });
         }
     });
 
-    return groups;
+    return catalog;
 }
 
-function parseQuestion(block, defaultBatch) {
-    try {
-        const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-        if (lines.length < 4) return null;
+function upsertSubject(catalog, folderName) {
+    const slug = slugify(folderName);
+    if (!catalog[slug]) {
+        catalog[slug] = {
+            slug,
+            name: folderName || titleCaseSlug(slug),
+            lectureFiles: [],
+            aiFiles: [],
+            lectures: [],
+            years: [],
+            ai: [],
+            counts: { lectures: 0, years: 0, ai: 0, totalQuestions: 0 }
+        };
+    }
+}
 
+async function loadSubjectData() {
+    allLectures = [];
+    allYears = [];
+    allAI = [];
+    allQuestions = [];
+
+    for (const subject of Object.values(subjectCatalog)) {
+        // Normal lecture files
+        for (const file of subject.lectureFiles) {
+            const text = await fetchText(file.rawUrl);
+            const lectureName = file.fileName.replace(/\.txt$/i, '');
+            const questions = parseLectureTxt(text, {
+                subjectName: subject.name,
+                subjectSlug: subject.slug,
+                lectureName,
+                source: 'lecture'
+            });
+            const group = {
+                name: lectureName,
+                type: 'lecture',
+                subjectName: subject.name,
+                subjectSlug: subject.slug,
+                questions
+            };
+            if (questions.length) {
+                subject.lectures.push(group);
+                allLectures.push(group);
+                allQuestions.push(...questions);
+            }
+        }
+
+        // Derive Year/Batch groups only from normal lecture files
+        const yearMap = {};
+        subject.lectures.forEach(lectureGroup => {
+            lectureGroup.questions.forEach(q => {
+                if (!q.batchName) return;
+                if (!yearMap[q.batchName]) yearMap[q.batchName] = [];
+                yearMap[q.batchName].push({
+                    ...q,
+                    source: 'year',
+                    groupName: q.batchName
+                });
+            });
+        });
+        subject.years = Object.entries(yearMap)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([batchName, questions]) => ({
+                name: batchName,
+                type: 'year',
+                subjectName: subject.name,
+                subjectSlug: subject.slug,
+                questions
+            }));
+        allYears.push(...subject.years);
+
+        // AI folder lecture files
+        for (const file of subject.aiFiles) {
+            const text = await fetchText(file.rawUrl);
+            const lectureName = file.fileName.replace(/\.txt$/i, '');
+            const questions = parseLectureTxt(text, {
+                subjectName: subject.name,
+                subjectSlug: subject.slug,
+                lectureName,
+                source: 'ai'
+            });
+            const group = {
+                name: lectureName,
+                type: 'ai',
+                subjectName: subject.name,
+                subjectSlug: subject.slug,
+                questions
+            };
+            if (questions.length) {
+                subject.ai.push(group);
+                allAI.push(group);
+                allQuestions.push(...questions);
+            }
+        }
+
+        subject.counts.lectures = subject.lectures.length;
+        subject.counts.years = subject.years.length;
+        subject.counts.ai = subject.ai.length;
+        subject.counts.totalQuestions = [
+            ...subject.lectures.flatMap(g => g.questions),
+            ...subject.ai.flatMap(g => g.questions)
+        ].length;
+    }
+}
+
+async function fetchText(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+    return res.text();
+}
+
+function parseLectureTxt(text, ctx) {
+    const normalized = String(text)
+        .replace(/\r/g, '')
+        .replace(/^﻿/, '')
+        .replace(/\n\s*\/\/\/\/\/[\s\S]*$/g, '\n')
+        .trim();
+
+    if (!normalized) return [];
+
+    const blocks = normalized
+        .split(/\n\s*###\s*\n|\n\s*###\s*$/g)
+        .map(b => b.trim())
+        .filter(Boolean);
+
+    const questions = [];
+    let autoNumber = 1;
+
+    for (const block of blocks) {
+        const q = parseQuestionBlock(block, ctx, autoNumber);
+        if (q) {
+            questions.push(q);
+            autoNumber += 1;
+        }
+    }
+    return questions;
+}
+
+function parseQuestionBlock(block, ctx, fallbackNumber) {
+    try {
+        const rawLines = block.split('\n').map(line => line.trim()).filter(Boolean);
+        if (!rawLines.length) return null;
+
+        let lines = [...rawLines];
+        // Remove repeated lecture title if present at block start
+        if (lines[0].toLowerCase() === String(ctx.lectureName).toLowerCase()) {
+            lines.shift();
+        }
+        if (!lines.length) return null;
+
+        let i = 0;
         let questionNumber = '';
         let questionText = '';
         let options = [];
         let correctAnswerLetter = '';
         let correctAnswerText = '';
         let explanation = '';
-        let batchName = defaultBatch;
+        let batchName = '';
         let pageNumber = '';
 
-        let i = 0;
-
-        if (lines[i] && lines[i].match(/^Question\s+\d+/i)) {
-            questionNumber = lines[i].replace(/^Question\s+/i, '').trim();
-            i++;
+        // Optional "Question 9:" line
+        if (/^Question\s+\d+/i.test(lines[i])) {
+            const match = lines[i].match(/^Question\s+(\d+)/i);
+            questionNumber = match ? match[1] : '';
+            i += 1;
         }
 
-        let qTextLines = [];
-        while (i < lines.length && !lines[i].match(/^[A-E]\)/)) {
-            qTextLines.push(lines[i]);
-            i++;
+        // Question text until options start
+        const qTextLines = [];
+        while (i < lines.length && !isOptionLine(lines[i]) && !/^Correct Answer:/i.test(lines[i])) {
+            qTextLines.push(lines[i].replace(/:$/, ''));
+            i += 1;
         }
-        questionText = qTextLines.join(' ');
+        questionText = qTextLines.join(' ').trim();
+        if (!questionText) return null;
 
-        while (i < lines.length && lines[i].match(/^[A-E]\)/)) {
-            options.push(lines[i]);
-            i++;
+        // Options
+        while (i < lines.length && isOptionLine(lines[i])) {
+            options.push(normalizeOption(lines[i]));
+            i += 1;
         }
+        if (!options.length) return null;
 
+        // Correct answer
         while (i < lines.length) {
-            if (lines[i].match(/^Correct Answer:/i)) {
-                correctAnswerLetter = lines[i].replace(/^Correct Answer:\s*/i, '').trim().charAt(0);
-                i++;
+            if (/^Correct Answer:/i.test(lines[i])) {
+                const answerRaw = lines[i].replace(/^Correct Answer:\s*/i, '').trim();
+                const letterMatch = answerRaw.match(/^([A-E])/i);
+                correctAnswerLetter = letterMatch ? letterMatch[1].toUpperCase() : '';
+                correctAnswerText = answerRaw.replace(/^[A-E][\)\.]?\s*/i, '').trim();
+                i += 1;
                 break;
             }
-            i++;
+            i += 1;
+        }
+        if (!correctAnswerText && correctAnswerLetter) {
+            const correctOption = options.find(opt => opt.startsWith(correctAnswerLetter + ')'));
+            if (correctOption) correctAnswerText = correctOption.substring(2).trim();
         }
 
-        const correctOption = options.find(opt => opt.startsWith(correctAnswerLetter + ')'));
-        if (correctOption) {
-            correctAnswerText = correctOption.substring(2).trim();
-        } else {
-            correctAnswerText = '';
-        }
-
-        let explanationLines = [];
-        while (i < lines.length) {
-            if (lines[i].match(/^Explanation:/i)) {
-                explanationLines.push(lines[i].replace(/^Explanation:\s*/i, ''));
-                i++;
-                while (i < lines.length && !isMetadataLine(lines[i])) {
-                    explanationLines.push(lines[i]);
-                    i++;
-                }
-                break;
+        // Explanation if present
+        if (i < lines.length && /^Explanation:/i.test(lines[i])) {
+            const explanationLines = [lines[i].replace(/^Explanation:\s*/i, '')];
+            i += 1;
+            while (i < lines.length && !isMetadataLine(lines[i])) {
+                explanationLines.push(lines[i]);
+                i += 1;
             }
-            i++;
+            explanation = explanationLines.join(' ').trim();
         }
-        explanation = explanationLines.join(' ');
 
+        // trailing metadata: batch/page (optional)
         while (i < lines.length) {
-            if (lines[i].match(/^P\d+/i)) {
-                pageNumber = lines[i];
-            } else if (lines[i].trim()) {
-                batchName = lines[i];
-            }
-            i++;
+            const line = lines[i];
+            if (isPageLine(line)) pageNumber = line;
+            else if (isBatchLine(line)) batchName = line;
+            i += 1;
         }
 
-        const id = `${batchName}-Q${questionNumber}`.replace(/\s+/g, '-');
-
+        const finalNumber = questionNumber || String(fallbackNumber);
+        const questionId = makeQuestionId(ctx, finalNumber, questionText);
         return {
-            id,
-            number: questionNumber,
+            id: questionId,
+            number: finalNumber,
             text: questionText,
             optionsRaw: options,
             correctAnswerLetter,
             correctAnswerText,
             explanation,
             batchName,
+            lectureName: ctx.lectureName,
             pageNumber,
-            groupName: defaultBatch
+            groupName: ctx.source === 'year' ? batchName : ctx.lectureName,
+            source: ctx.source,
+            subjectName: ctx.subjectName,
+            subjectSlug: ctx.subjectSlug
         };
     } catch (err) {
-        console.warn('Error parsing question block:', err);
+        console.warn('Failed to parse question block:', err, block);
         return null;
     }
 }
 
-function isMetadataLine(line) {
-    if (line.match(/^P\d+/i)) return true;
-    if (line.match(/^\d+(st|nd|rd|th)\s+Year/i)) return true;
-    if (line.match(/^[A-Z].*-\s*.+/)) return true;
-    return false;
+function isOptionLine(line) {
+    return /^[A-E][\)\.]\s+/i.test(line);
 }
 
-// ============================================
-// خلط الخيارات
-// ============================================
-function shuffleOptions(question) {
-    const opts = question.optionsRaw.map((opt, idx) => {
-        const letter = opt.charAt(0);
-        const text = opt.substring(2).trim();
-        return { letter, text, originalIndex: idx };
-    });
-    for (let i = opts.length - 1; i > 0; i--) {
+function normalizeOption(line) {
+    const text = line.replace(/^[A-E][\)\.]\s*/i, '').trim();
+    const letterMatch = line.match(/^([A-E])/i);
+    const letter = letterMatch ? letterMatch[1].toUpperCase() : 'A';
+    return `${letter}) ${text}`;
+}
+
+function isPageLine(line) {
+    return /^P\s*\(?\d+\)?$/i.test(line);
+}
+
+function isBatchLine(line) {
+    return /^[A-Za-z\u0600-\u06FF][A-Za-z0-9\u0600-\u06FF\s_\-]+-\s*\d+[A-Za-z0-9\u0600-\u06FF\s_\-]*$/i.test(line);
+}
+
+function isMetadataLine(line) {
+    return isPageLine(line) || isBatchLine(line);
+}
+
+function makeQuestionId(ctx, number, questionText) {
+    const fragment = slugify(questionText).slice(0, 40) || 'q';
+    return `${ctx.subjectSlug}__${ctx.source}__${slugify(ctx.lectureName)}__${number}__${fragment}`;
+}
+
+function shuffleArray(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [opts[i], opts[j]] = [opts[j], opts[i]];
+        [copy[i], copy[j]] = [copy[j], copy[i]];
     }
-    const newOptions = [];
-    const newLetters = ['A', 'B', 'C', 'D', 'E'];
-    opts.forEach((opt, newIdx) => {
-        const newLetter = newLetters[newIdx];
-        newOptions.push(`${newLetter}) ${opt.text}`);
-        opt.newLetter = newLetter;
-    });
-    const correctNew = newOptions.find(opt => opt.substring(2).trim() === question.correctAnswerText);
-    const correctNewLetter = correctNew ? correctNew.charAt(0) : 'A';
+    return copy;
+}
+
+function shuffleOptions(question) {
+    const options = question.optionsRaw.map((opt, idx) => ({
+        idx,
+        letter: opt.charAt(0),
+        text: opt.substring(2).trim()
+    }));
+    for (let i = options.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [options[i], options[j]] = [options[j], options[i]];
+    }
+    const letters = ['A', 'B', 'C', 'D', 'E'];
+    const shuffledOptions = options.map((opt, i) => `${letters[i]}) ${opt.text}`);
     return {
-        shuffledOptions: newOptions,
-        mappedCorrectLetter: correctNewLetter,
+        shuffledOptions,
         originalCorrectText: question.correctAnswerText
     };
 }
 
-// ============================================
-// NAVIGATION
-// ============================================
 function showScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(screenId).classList.add('active');
-    // إخفاء لوحات الإعدادات والإحصائيات عند تغيير الشاشة
+    document.querySelectorAll('.screen').forEach(screen => screen.classList.remove('active'));
+    document.getElementById(screenId)?.classList.add('active');
     document.getElementById('settings-panel')?.classList.remove('visible');
     document.getElementById('statistics-panel')?.classList.remove('visible');
 }
 
 function goHome() {
-    window.location.reload();
+    showScreen('home-screen');
+    readonlyReturnTo = 'home';
 }
 
 function openSection(section) {
-    switch (section) {
-        case 'lectures':
-            showSelectionScreen(allLectures, 'Select Lectures');
-            break;
-        case 'years':
-            showSelectionScreen(allYears, 'Select Year Batches');
-            break;
-        case 'wrong':
-            openWrongQuestions();
-            break;
-        case 'favorites':
-            openFavoriteQuestions();
-            break;
-        case 'search':
-            showScreen('search-screen');
-            document.getElementById('search-input').value = '';
-            document.getElementById('search-results').innerHTML = '';
-            break;
+    if (section === 'exams') {
+        renderSubjects();
+        showSubjectsScreen();
+    } else if (section === 'wrong') {
+        openWrongQuestions();
+    } else if (section === 'favorites') {
+        openFavoriteQuestions();
+    } else if (section === 'search') {
+        readonlyReturnTo = 'search';
+        showScreen('search-screen');
+        document.getElementById('search-input').value = '';
+        document.getElementById('search-results').innerHTML = '';
     }
 }
 
-// ============================================
-// SELECTION SCREEN (مختصر للطول)
-// ============================================
+function showSubjectsScreen() {
+    showScreen('subjects-screen');
+}
+
+function renderSubjects() {
+    const list = document.getElementById('subjects-list');
+    const subjects = Object.values(subjectCatalog).sort((a, b) => a.name.localeCompare(b.name));
+    if (!subjects.length) {
+        list.innerHTML = '<div class="selection-item"><div><strong>No subject folders found.</strong><br><small class="inline-note">Create folders like Surgery/, Ortho/, Anesthesia/ and put TXT lecture files inside.</small></div></div>';
+        return;
+    }
+    list.innerHTML = subjects.map(subject => `
+        <div class="subject-choice-item" onclick="openSubjectModes('${escapeJs(subject.slug)}')">
+            <div>
+                <strong>${escapeHtml(subject.name)}</strong>
+                <div class="meta">${subject.counts.totalQuestions} question(s)</div>
+                <div class="source-chip-row">
+                    <span class="source-chip ${subject.lectures.length ? 'available' : ''}">Lectures: ${subject.lectures.length}</span>
+                    ${subject.years.length ? `<span class="source-chip available">Years: ${subject.years.length}</span>` : ''}
+                    ${subject.ai.length ? `<span class="source-chip available">AI: ${subject.ai.length}</span>` : ''}
+                </div>
+            </div>
+            <div class="choice-arrow">›</div>
+        </div>
+    `).join('');
+}
+
+function openSubjectModes(subjectSlug) {
+    currentSubjectSlug = subjectSlug;
+    const subject = subjectCatalog[subjectSlug];
+    if (!subject) return;
+    document.getElementById('subject-mode-title').textContent = subject.name;
+
+    const cards = [];
+    if (subject.lectures.length) {
+        cards.push(`
+            <div class="subject-choice-item" onclick="openGroupsForSubject('${escapeJs(subjectSlug)}', 'lecture')">
+                <div>
+                    <strong>Lectures</strong>
+                    <div class="meta">All lecture TXT files inside ${escapeHtml(subject.name)}/</div>
+                </div>
+                <div class="choice-arrow">›</div>
+            </div>
+        `);
+    }
+    if (subject.years.length) {
+        cards.push(`
+            <div class="subject-choice-item" onclick="openGroupsForSubject('${escapeJs(subjectSlug)}', 'year')">
+                <div>
+                    <strong>Years</strong>
+                    <div class="meta">Built automatically from detected batch names like Iris - 5</div>
+                </div>
+                <div class="choice-arrow">›</div>
+            </div>
+        `);
+    }
+    if (subject.ai.length) {
+        cards.push(`
+            <div class="subject-choice-item" onclick="openGroupsForSubject('${escapeJs(subjectSlug)}', 'ai')">
+                <div>
+                    <strong>AI</strong>
+                    <div class="meta">TXT files inside ${escapeHtml(subject.name)}/AI/</div>
+                </div>
+                <div class="choice-arrow">›</div>
+            </div>
+        `);
+    }
+
+    document.getElementById('subject-mode-list').innerHTML = cards.join('') || '<div class="selection-item"><div>No lecture files found in this subject yet.</div></div>';
+    showScreen('subject-mode-screen');
+}
+
+function openGroupsForSubject(subjectSlug, type) {
+    const subject = subjectCatalog[subjectSlug];
+    if (!subject) return;
+
+    let groups = [];
+    let title = subject.name;
+    let searchEnabled = false;
+
+    if (type === 'lecture') {
+        groups = subject.lectures;
+        title += ' · Lectures';
+        searchEnabled = true;
+    } else if (type === 'year') {
+        groups = subject.years;
+        title += ' · Years';
+    } else if (type === 'ai') {
+        groups = subject.ai;
+        title += ' · AI';
+        searchEnabled = true;
+    }
+
+    selectionScreenReturnTo = 'subject-mode';
+    showSelectionScreen(groups, title, searchEnabled);
+}
+
+function backFromSelection() {
+    if (selectionScreenReturnTo === 'subject-mode') showScreen('subject-mode-screen');
+    else if (selectionScreenReturnTo === 'subjects') showSubjectsScreen();
+    else goHome();
+}
+
 function resetSelectionState() {
     selectedGroups = [];
     currentGroups = [];
@@ -310,15 +602,15 @@ function resetSelectionState() {
     extraTimeAdded = false;
 }
 
-function showSelectionScreen(groups, title) {
+function showSelectionScreen(groups, title, enableSearch = false) {
     resetSelectionState();
-    currentGroups = groups;
+    currentGroups = groups || [];
     showScreen('selection-screen');
     document.getElementById('selection-title').textContent = title;
 
     const searchContainer = document.getElementById('selection-search-container');
     const searchInput = document.getElementById('selection-search');
-    if (groups === allLectures) {
+    if (enableSearch) {
         searchContainer.classList.remove('hidden');
         searchInput.value = '';
     } else {
@@ -327,15 +619,14 @@ function showSelectionScreen(groups, title) {
 
     const list = document.getElementById('selection-list');
     list.innerHTML = '';
-
     groups.forEach((group, idx) => {
         const item = document.createElement('div');
         item.className = 'selection-item';
-        item.dataset.groupName = group.name.toLowerCase();
+        item.dataset.groupName = String(group.name || '').toLowerCase();
         item.innerHTML = `
             <input type="checkbox" id="group-${idx}" onchange="toggleGroupSelection(${idx})">
-            <label for="group-${idx}">
-                <strong>${group.name}</strong>
+            <label for="group-${idx}" style="cursor:pointer; width: 100%;">
+                <strong>${escapeHtml(group.name)}</strong>
                 <br><small style="color:var(--text-muted)">${group.questions.length} questions</small>
             </label>
         `;
@@ -358,33 +649,37 @@ function showSelectionScreen(groups, title) {
 }
 
 function filterSelectionList() {
-    const searchTerm = document.getElementById('selection-search').value.toLowerCase().trim();
-    const items = document.querySelectorAll('#selection-list .selection-item');
-    items.forEach(item => {
-        const groupName = item.dataset.groupName || '';
-        item.style.display = groupName.includes(searchTerm) ? '' : 'none';
+    const term = document.getElementById('selection-search').value.toLowerCase().trim();
+    document.querySelectorAll('#selection-list .selection-item').forEach(item => {
+        const name = item.dataset.groupName || '';
+        item.style.display = name.includes(term) ? '' : 'none';
     });
 }
 
 function toggleGroupSelection(idx) {
-    const existingIdx = selectedGroups.indexOf(idx);
-    if (existingIdx > -1) {
-        selectedGroups.splice(existingIdx, 1);
-    } else {
-        selectedGroups.push(idx);
-    }
+    const existing = selectedGroups.indexOf(idx);
+    if (existing > -1) selectedGroups.splice(existing, 1);
+    else selectedGroups.push(idx);
+
+    document.querySelectorAll('#selection-list .selection-item').forEach((item, i) => {
+        const selected = selectedGroups.includes(i);
+        item.classList.toggle('selected', selected);
+        const cb = item.querySelector('input');
+        if (cb) cb.checked = selected;
+    });
     updateSelectionFooter();
 }
 
 function updateSelectionFooter() {
     const footer = document.getElementById('selection-footer');
     const totalQuestions = selectedGroups.reduce((sum, idx) => sum + currentGroups[idx].questions.length, 0);
+    const input = document.getElementById('question-count-input');
 
-    if (selectedGroups.length > 0) {
+    if (selectedGroups.length) {
         footer.classList.remove('hidden');
         document.getElementById('selected-count').textContent = `${totalQuestions} questions selected`;
-        document.getElementById('question-count-input').max = totalQuestions;
-        document.getElementById('question-count-input').value = totalQuestions;
+        input.max = totalQuestions;
+        input.value = totalQuestions;
         document.getElementById('max-questions-label').textContent = `/ ${totalQuestions}`;
     } else {
         footer.classList.add('hidden');
@@ -392,6 +687,8 @@ function updateSelectionFooter() {
 
     selectedMode = null;
     selectedDirection = null;
+    extraTime = 0;
+    extraTimeAdded = false;
     document.getElementById('direction-selection').classList.add('hidden');
     document.getElementById('timer-options').classList.add('hidden');
     document.getElementById('start-section').classList.add('hidden');
@@ -399,35 +696,41 @@ function updateSelectionFooter() {
     document.querySelectorAll('.btn-direction').forEach(b => b.classList.remove('active'));
 }
 
-// ============================================
-// MODE AND DIRECTION
-// ============================================
+function onQuestionCountChange() {
+    const input = document.getElementById('question-count-input');
+    const max = Number(input.max || 0);
+    let value = Number(input.value || 0);
+    if (value < 1) value = 1;
+    if (max && value > max) value = max;
+    input.value = value;
+    if (selectedMode === 'exam' && selectedDirection) {
+        document.getElementById('base-time-display').textContent = `${value} min`;
+        document.getElementById('total-time-display').textContent = `${value + extraTime} min`;
+    }
+}
+
 function selectMode(mode) {
     selectedMode = mode;
     selectedDirection = null;
     extraTime = 0;
     extraTimeAdded = false;
-
     document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
     document.getElementById(mode === 'training' ? 'btn-training-mode' : 'btn-exam-mode').classList.add('active');
-
     document.getElementById('direction-selection').classList.remove('hidden');
     document.querySelectorAll('.btn-direction').forEach(b => b.classList.remove('active'));
-
     document.getElementById('timer-options').classList.add('hidden');
     document.getElementById('start-section').classList.add('hidden');
 }
 
 function selectDirection(direction) {
     selectedDirection = direction;
-
     document.querySelectorAll('.btn-direction').forEach(b => b.classList.remove('active'));
     document.getElementById(direction === 'oneway' ? 'btn-oneway' : 'btn-twoway').classList.add('active');
 
     if (selectedMode === 'exam') {
         const count = parseInt(document.getElementById('question-count-input').value) || 0;
         document.getElementById('base-time-display').textContent = `${count} min`;
-        document.getElementById('extra-time-display').textContent = `+0 min`;
+        document.getElementById('extra-time-display').textContent = '+0 min';
         document.getElementById('total-time-display').textContent = `${count} min`;
         document.getElementById('timer-options').classList.remove('hidden');
         const btn = document.getElementById('btn-add-extra');
@@ -438,7 +741,6 @@ function selectDirection(direction) {
     } else {
         document.getElementById('timer-options').classList.add('hidden');
     }
-
     document.getElementById('start-section').classList.remove('hidden');
 }
 
@@ -446,11 +748,9 @@ function addExtraTime() {
     if (extraTimeAdded) return;
     extraTime = 5;
     extraTimeAdded = true;
-
     const count = parseInt(document.getElementById('question-count-input').value) || 0;
-    document.getElementById('extra-time-display').textContent = `+5 min`;
+    document.getElementById('extra-time-display').textContent = '+5 min';
     document.getElementById('total-time-display').textContent = `${count + 5} min`;
-
     const btn = document.getElementById('btn-add-extra');
     btn.disabled = true;
     btn.textContent = '✓ Extra 5 Minutes Added';
@@ -461,7 +761,6 @@ function confirmStartExam() {
         showToast('Please select mode and direction');
         return;
     }
-
     const count = parseInt(document.getElementById('question-count-input').value);
     if (!count || count < 1) {
         showToast('Please enter a valid number of questions');
@@ -472,16 +771,11 @@ function confirmStartExam() {
     selectedGroups.forEach(idx => {
         questions = questions.concat(currentGroups[idx].questions);
     });
-
     questions = shuffleArray(questions).slice(0, count);
 
     const processedQuestions = questions.map(q => {
         const shuffled = shuffleOptions(q);
-        return {
-            ...q,
-            shuffledOptions: shuffled.shuffledOptions,
-            originalCorrectText: q.correctAnswerText
-        };
+        return { ...q, shuffledOptions: shuffled.shuffledOptions, originalCorrectText: q.correctAnswerText };
     });
 
     currentExam = {
@@ -500,21 +794,13 @@ function confirmStartExam() {
     saveExamState();
     showScreen('exam-screen');
     renderExam();
-
-    if (selectedMode === 'exam') {
-        startTimer();
-    }
+    if (selectedMode === 'exam') startTimer();
 }
 
-// ============================================
-// EXAM RENDERING (مع زر إعدادات فعال)
-// ============================================
 function renderExam() {
     if (!currentExam) return;
-
     const { mode, questions, currentIndex, answers } = currentExam;
     const question = questions[currentIndex];
-
     const remaining = questions.length - currentIndex;
     let progressText = `${currentIndex + 1}/${questions.length}`;
 
@@ -525,57 +811,49 @@ function renderExam() {
             return selectedText === questions[i].originalCorrectText;
         }).length;
         const answered = currentExam.firstAnswers.filter(a => a !== null).length;
-        const pct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
+        const pct = answered ? Math.round((correct / answered) * 100) : 0;
         progressText += ` · ✓${correct} · ${pct}%`;
     } else {
         progressText += ` · ${remaining} left`;
     }
+
     document.getElementById('exam-progress').textContent = progressText;
-
     renderGrid();
-
-    const container = document.getElementById('question-container');
     const isFav = favorites.includes(question.id);
-    const shuffledOpts = question.shuffledOptions;
 
-    container.innerHTML = `
+    document.getElementById('question-container').innerHTML = `
         <div class="question-header">
-            <span class="question-number">Q${question.number || (currentIndex + 1)}</span>
+            <span class="question-number">Q${escapeHtml(question.number || String(currentIndex + 1))}</span>
             <div class="question-actions">
-                <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${question.id}')" title="Favorite">✦</button>
-                <button class="icon-btn" onclick="showLocation('${question.batchName}', '${question.number || currentIndex + 1}', '${question.pageNumber}')" title="Location">📍</button>
-                <button class="icon-btn" id="exam-settings-btn" title="Settings">⚙️</button>
+                <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${escapeJs(question.id)}')" title="Favorite">✦</button>
+                <button class="icon-btn" onclick="showLocation('${escapeJs(question.subjectName)}', '${escapeJs(question.lectureName)}', '${escapeJs(question.batchName)}', '${escapeJs(question.number)}', '${escapeJs(question.pageNumber)}')" title="Location">📍</button>
+                <button class="icon-btn" onclick="openExamSettings()" title="Settings">⚙️</button>
             </div>
         </div>
-        <p class="question-text">${question.text}</p>
+        <p class="question-text">${escapeHtml(question.text)}</p>
         <div class="options-list">
-            ${shuffledOpts.map((opt, i) => {
+            ${question.shuffledOptions.map((opt, i) => {
                 let cls = 'option-btn';
                 if (answers[currentIndex] === i) cls += ' selected';
                 if (mode === 'training' && currentExam.showAnswer) {
-                    const isCorrectOpt = (opt.substring(2).trim() === question.originalCorrectText);
+                    const isCorrectOpt = opt.substring(2).trim() === question.originalCorrectText;
                     if (isCorrectOpt) cls += ' correct';
                     else if (answers[currentIndex] === i && !isCorrectOpt) cls += ' wrong';
                 }
-                return `<button class="${cls}" onclick="selectOption(${i})">${opt}</button>`;
+                return `<button class="${cls}" onclick="selectOption(${i})">${escapeHtml(opt)}</button>`;
             }).join('')}
         </div>
         <div class="explanation-box ${(mode === 'training' && currentExam.showAnswer) ? 'visible' : ''}">
-            <strong>Explanation:</strong> ${question.explanation}
+            <strong>Explanation:</strong> ${escapeHtml(question.explanation || 'No explanation available.')}
         </div>
+        <div class="mt-20 inline-note">Subject: ${escapeHtml(question.subjectName)} · Lecture: ${escapeHtml(question.lectureName || '—')} · Batch: ${escapeHtml(question.batchName || '—')}</div>
     `;
-
-    // ربط زر الإعدادات بعد إضافته إلى DOM
-    const settingsBtn = document.getElementById('exam-settings-btn');
-    if (settingsBtn) settingsBtn.onclick = openExamSettings;
-
     renderExamNav();
 }
 
 function renderGrid() {
     const grid = document.getElementById('question-grid');
     const { questions, currentIndex, answers, mode, direction, firstAnswers } = currentExam;
-
     grid.innerHTML = '';
     questions.forEach((q, i) => {
         let cls = 'grid-btn';
@@ -583,8 +861,7 @@ function renderGrid() {
         else if (answers[i] !== null) {
             if (mode === 'training' && firstAnswers[i] !== null) {
                 const selectedText = q.shuffledOptions[firstAnswers[i]].substring(2).trim();
-                const isCorrect = (selectedText === q.originalCorrectText);
-                cls += isCorrect ? ' answered' : ' wrong';
+                cls += selectedText === q.originalCorrectText ? ' answered' : ' wrong';
             } else {
                 cls += ' answered';
             }
@@ -602,71 +879,56 @@ function renderGrid() {
 function renderExamNav() {
     const nav = document.getElementById('exam-nav');
     const { mode, direction, currentIndex, questions } = currentExam;
-
     let html = '';
 
-    if (direction === 'twoway' && currentIndex > 0) {
-        html += `<button class="btn-secondary" onclick="prevQuestion()">← Previous</button>`;
-    } else {
-        html += `<span></span>`;
-    }
+    if (direction === 'twoway' && currentIndex > 0) html += '<button class="btn-secondary" onclick="prevQuestion()">← Previous</button>';
+    else html += '<span></span>';
 
     if (mode === 'training') {
         if (currentExam.showAnswer) {
-            if (currentIndex < questions.length - 1) {
-                html += `<button class="btn-primary" onclick="nextQuestion()">Next →</button>`;
-            } else {
-                html += `<button class="btn-primary" onclick="finishExam()">Finish</button>`;
-            }
-        } else if (currentExam.answers[currentIndex] !== null && !currentExam.showAnswer) {
-            html += `<button class="btn-small" onclick="showAnswer()">Show Answer</button>`;
+            html += currentIndex < questions.length - 1
+                ? '<button class="btn-primary" onclick="nextQuestion()">Next →</button>'
+                : '<button class="btn-primary" onclick="finishExam()">Finish</button>';
+        } else if (currentExam.answers[currentIndex] !== null) {
+            html += '<button class="btn-small" onclick="showAnswer()">Show Answer</button>';
         } else {
-            html += `<span></span>`;
+            html += '<span></span>';
         }
     } else {
         if (currentExam.answers[currentIndex] !== null) {
-            if (currentIndex < questions.length - 1) {
-                html += `<button class="btn-primary" onclick="nextQuestion()">Next →</button>`;
-            } else {
-                html += `<button class="btn-primary" onclick="finishExam()">Submit Exam</button>`;
-            }
+            html += currentIndex < questions.length - 1
+                ? '<button class="btn-primary" onclick="nextQuestion()">Next →</button>'
+                : '<button class="btn-primary" onclick="finishExam()">Submit Exam</button>';
         } else {
-            html += `<span></span>`;
+            html += '<span></span>';
         }
     }
-
     nav.innerHTML = html;
 }
 
-// ============================================
-// EXAM INTERACTION (اختصار)
-// ============================================
 function selectOption(optionIndex) {
     if (!currentExam || currentExam.submitted) return;
     const { mode, currentIndex } = currentExam;
     if (mode === 'training' && currentExam.showAnswer) return;
 
     currentExam.answers[currentIndex] = optionIndex;
-    if (currentExam.firstAnswers[currentIndex] === null) {
-        currentExam.firstAnswers[currentIndex] = optionIndex;
-    }
+    if (currentExam.firstAnswers[currentIndex] === null) currentExam.firstAnswers[currentIndex] = optionIndex;
 
     if (mode === 'training') {
         const question = currentExam.questions[currentIndex];
         const selectedText = question.shuffledOptions[optionIndex].substring(2).trim();
-        const isCorrect = (selectedText === question.originalCorrectText);
-
+        const isCorrect = selectedText === question.originalCorrectText;
         if (isCorrect) {
             currentExam.showAnswer = true;
             showCelebration();
             saveExamState();
             renderExam();
         } else {
-            renderExam();
             if (!wrongQuestions.includes(question.id)) {
                 wrongQuestions.push(question.id);
                 saveWrongQuestions();
             }
+            renderExam();
         }
     } else {
         saveExamState();
@@ -680,12 +942,9 @@ function showAnswer() {
     const userAnswerIdx = currentExam.answers[currentExam.currentIndex];
     if (userAnswerIdx !== null) {
         const selectedText = question.shuffledOptions[userAnswerIdx].substring(2).trim();
-        const isCorrect = (selectedText === question.originalCorrectText);
-        if (!isCorrect && currentExam.mode === 'training') {
-            if (!wrongQuestions.includes(question.id)) {
-                wrongQuestions.push(question.id);
-                saveWrongQuestions();
-            }
+        if (selectedText !== question.originalCorrectText && !wrongQuestions.includes(question.id)) {
+            wrongQuestions.push(question.id);
+            saveWrongQuestions();
         }
     }
     currentExam.showAnswer = true;
@@ -696,7 +955,7 @@ function showAnswer() {
 function nextQuestion() {
     if (!currentExam) return;
     if (currentExam.currentIndex < currentExam.questions.length - 1) {
-        currentExam.currentIndex++;
+        currentExam.currentIndex += 1;
         currentExam.showAnswer = false;
         saveExamState();
         renderExam();
@@ -705,26 +964,22 @@ function nextQuestion() {
 }
 
 function prevQuestion() {
-    if (!currentExam) return;
-    if (currentExam.direction !== 'twoway') return;
+    if (!currentExam || currentExam.direction !== 'twoway') return;
     if (currentExam.currentIndex > 0) {
-        currentExam.currentIndex--;
-        if (currentExam.mode === 'training') {
-            currentExam.showAnswer = currentExam.answers[currentExam.currentIndex] !== null;
-        }
+        currentExam.currentIndex -= 1;
+        if (currentExam.mode === 'training') currentExam.showAnswer = currentExam.answers[currentExam.currentIndex] !== null;
+        saveExamState();
         renderExam();
     }
 }
 
 function navigateToQuestion(index) {
     if (!currentExam) return;
-    const { direction, currentIndex } = currentExam;
-    if (direction === 'oneway' && index < currentIndex) return;
-    if (direction === 'twoway') {
+    if (currentExam.direction === 'oneway' && index < currentExam.currentIndex) return;
+    if (currentExam.direction === 'twoway') {
         currentExam.currentIndex = index;
-        if (currentExam.mode === 'training') {
-            currentExam.showAnswer = currentExam.answers[index] !== null;
-        }
+        if (currentExam.mode === 'training') currentExam.showAnswer = currentExam.answers[index] !== null;
+        saveExamState();
         renderExam();
     }
 }
@@ -736,9 +991,6 @@ function toggleGrid() {
     btn.innerHTML = grid.classList.contains('hidden') ? '<span>☰</span> Show Grid' : '<span>☰</span> Hide Grid';
 }
 
-// ============================================
-// EXIT EXAM WITH MODAL (يعمل بشكل مثالي)
-// ============================================
 function exitExam() {
     if (!currentExam || currentExam.submitted) {
         currentExam = null;
@@ -749,88 +1001,47 @@ function exitExam() {
 }
 
 function showExitConfirmModal() {
-    const modal = document.getElementById('custom-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const modalBody = document.getElementById('modal-body');
-    const modalButtons = document.getElementById('modal-buttons');
-    
-    modalTitle.textContent = 'خروج من الامتحان';
-    modalBody.innerHTML = '<p>هل أنت متأكد من رغبتك بالخروج من الامتحان؟</p>';
-    modalButtons.innerHTML = `
-        <button class="btn-secondary" id="modal-no">لا</button>
-        <button class="btn-primary" id="modal-yes">نعم</button>
-    `;
-    modal.classList.remove('hidden');
-    
-    document.getElementById('modal-yes').onclick = () => {
-        modal.classList.add('hidden');
-        showSaveProgressModal();
-    };
-    document.getElementById('modal-no').onclick = () => {
-        modal.classList.add('hidden');
-    };
+    showModal({
+        title: 'خروج من الامتحان',
+        body: '<p>هل أنت متأكد من رغبتك بالخروج من الامتحان؟</p>',
+        actions: [
+            { label: 'لا', className: 'btn-secondary', onClick: closeModal },
+            { label: 'نعم', className: 'btn-primary', onClick: () => { closeModal(); showSaveProgressModal(); } }
+        ]
+    });
 }
 
 function showSaveProgressModal() {
-    const modal = document.getElementById('custom-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const modalBody = document.getElementById('modal-body');
-    const modalButtons = document.getElementById('modal-buttons');
-    
-    modalTitle.textContent = 'حفظ التقدم';
-    modalBody.innerHTML = '<p>هل تود حفظ تقدمك على الأسئلة التي أجبت عليها؟</p>';
-    modalButtons.innerHTML = `
-        <button class="btn-secondary" id="modal-cancel">العودة للامتحان</button>
-        <button class="btn-danger" id="modal-no-save">لا والخروج</button>
-        <button class="btn-primary" id="modal-save">نعم والخروج</button>
-    `;
-    modal.classList.remove('hidden');
-    
-    document.getElementById('modal-save').onclick = () => {
-        modal.classList.add('hidden');
-        saveExamState();
-        currentExam = null;
-        goHome();
-    };
-    document.getElementById('modal-no-save').onclick = () => {
-        modal.classList.add('hidden');
-        clearExamState();
-        currentExam = null;
-        goHome();
-    };
-    document.getElementById('modal-cancel').onclick = () => {
-        modal.classList.add('hidden');
-    };
+    showModal({
+        title: 'حفظ التقدم',
+        body: '<p>هل تود حفظ تقدمك على الأسئلة التي أجبت عليها؟</p>',
+        actions: [
+            { label: 'العودة للامتحان', className: 'btn-secondary', onClick: closeModal },
+            { label: 'لا والخروج', className: 'btn-danger', onClick: () => { closeModal(); clearExamState(); currentExam = null; goHome(); } },
+            { label: 'نعم والخروج', className: 'btn-primary', onClick: () => { closeModal(); saveExamState(); currentExam = null; goHome(); } }
+        ]
+    });
 }
-
-// ============================================
-// TIMER
-// ============================================
-let timerInterval = null;
 
 function startTimer() {
     const timerEl = document.getElementById('exam-timer');
     timerEl.classList.remove('hidden');
-
+    clearInterval(timerInterval);
     timerInterval = setInterval(() => {
         if (!currentExam || currentExam.submitted) {
             clearInterval(timerInterval);
             return;
         }
-
         const elapsed = Date.now() - currentExam.startTime;
         const remaining = currentExam.totalTime - elapsed;
-
         if (remaining <= 0) {
             clearInterval(timerInterval);
             timeUp();
             return;
         }
-
         const mins = Math.floor(remaining / 60000);
         const secs = Math.floor((remaining % 60000) / 1000);
-        timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-
+        timerEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
         timerEl.classList.toggle('timer-danger', remaining <= 60000);
     }, 1000);
 }
@@ -841,22 +1052,14 @@ function timeUp() {
     finishExam();
 }
 
-// ============================================
-// FINISH EXAM & RESULTS (مختصر)
-// ============================================
 function finishExam() {
     if (!currentExam) return;
     currentExam.submitted = true;
     currentExam.endTime = Date.now();
-
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
-
+    clearInterval(timerInterval);
+    timerInterval = null;
     saveProgress();
     clearExamState();
-
     if (currentExam.mode === 'exam') {
         showScreen('results-screen');
         showWaitingMessages();
@@ -869,36 +1072,29 @@ function showWaitingMessages() {
     const waitDiv = document.getElementById('results-waiting');
     const contentDiv = document.getElementById('results-content');
     const msgEl = document.getElementById('waiting-message');
-
     waitDiv.classList.remove('hidden');
     contentDiv.innerHTML = '';
-
-    const messages = [
-        "Processing your answers...",
-        "Calculating your score...",
-        "Analyzing your performance...",
-        "Almost there...",
-        "Preparing your results..."
-    ];
-
-    let msgIdx = 0;
-    const msgInterval = setInterval(() => {
-        msgIdx = (msgIdx + 1) % messages.length;
-        msgEl.textContent = messages[msgIdx];
-    }, 2000);
-
+    const messages = ['Processing your answers...', 'Calculating your score...', 'Analyzing your performance...', 'Almost there...', 'Preparing your results...'];
+    let idx = 0;
+    const interval = setInterval(() => {
+        idx = (idx + 1) % messages.length;
+        msgEl.textContent = messages[idx];
+    }, 1600);
     setTimeout(() => {
-        clearInterval(msgInterval);
+        clearInterval(interval);
         waitDiv.classList.add('hidden');
         showResults();
-    }, 10000);
+    }, 3000);
 }
 
 function showResults() {
     showScreen('results-screen');
     const contentDiv = document.getElementById('results-content');
-    const { questions, answers, firstAnswers, startTime, endTime, mode } = currentExam;
+    const reviewDiv = document.getElementById('results-review');
+    reviewDiv.classList.add('hidden');
+    reviewDiv.innerHTML = '';
 
+    const { questions, answers, firstAnswers, startTime, endTime, mode } = currentExam;
     const total = questions.length;
     const answeredCount = answers.filter(a => a !== null).length;
     const unanswered = total - answeredCount;
@@ -908,37 +1104,25 @@ function showResults() {
     answersToCheck.forEach((ansIdx, i) => {
         if (ansIdx !== null) {
             const selectedText = questions[i].shuffledOptions[ansIdx].substring(2).trim();
-            if (selectedText === questions[i].originalCorrectText) correct++;
+            if (selectedText === questions[i].originalCorrectText) correct += 1;
         }
     });
 
     const incorrect = answeredCount - correct;
-    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-    const timeSpent = endTime ? Math.round((endTime - startTime) / 1000) : 0;
-    const mins = Math.floor(timeSpent / 60);
-    const secs = timeSpent % 60;
+    const score = total ? Math.round((correct / total) * 100) : 0;
+    const totalSeconds = endTime ? Math.round((endTime - startTime) / 1000) : 0;
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
 
     if (score > 50) showCelebration();
 
     contentDiv.innerHTML = `
         <div class="result-score">${score}%</div>
         <div class="result-details">
-            <div class="result-card">
-                <div class="value">${correct}/${total}</div>
-                <div class="label">Correct</div>
-            </div>
-            <div class="result-card">
-                <div class="value">${mins}m ${secs}s</div>
-                <div class="label">Time Spent</div>
-            </div>
-            <div class="result-card">
-                <div class="value">${unanswered}</div>
-                <div class="label">Unanswered</div>
-            </div>
-            <div class="result-card">
-                <div class="value">${incorrect}</div>
-                <div class="label">Incorrect</div>
-            </div>
+            <div class="result-card"><div class="value">${correct}/${total}</div><div class="label">Correct</div></div>
+            <div class="result-card"><div class="value">${mins}m ${secs}s</div><div class="label">Time Spent</div></div>
+            <div class="result-card"><div class="value">${unanswered}</div><div class="label">Unanswered</div></div>
+            <div class="result-card"><div class="value">${incorrect}</div><div class="label">Incorrect</div></div>
         </div>
         <button class="btn-primary mt-20" onclick="reviewExam()">Review Questions</button>
         <button class="btn-secondary mt-10" onclick="goHome()">Back to Home</button>
@@ -947,7 +1131,7 @@ function showResults() {
 
 function reviewExam() {
     if (!currentExam) return;
-    const { questions, answers, mode } = currentExam;
+    const { questions, answers } = currentExam;
     const reviewDiv = document.getElementById('results-review');
     reviewDiv.classList.remove('hidden');
 
@@ -955,10 +1139,9 @@ function reviewExam() {
     questions.forEach((q, i) => {
         const userAnswerIdx = answers[i];
         let isCorrect = false;
-        let selectedText = '';
         if (userAnswerIdx !== null) {
-            selectedText = q.shuffledOptions[userAnswerIdx].substring(2).trim();
-            isCorrect = (selectedText === q.originalCorrectText);
+            const selectedText = q.shuffledOptions[userAnswerIdx].substring(2).trim();
+            isCorrect = selectedText === q.originalCorrectText;
         }
         const correctIdx = q.shuffledOptions.findIndex(opt => opt.substring(2).trim() === q.originalCorrectText);
         const isFav = favorites.includes(q.id);
@@ -966,73 +1149,65 @@ function reviewExam() {
         html += `
             <div class="question-container mt-10" style="border-left: 4px solid ${isCorrect ? 'var(--success)' : 'var(--danger)'}">
                 <div class="question-header">
-                    <span class="question-number">Q${q.number || (i+1)}</span>
+                    <span class="question-number">Q${escapeHtml(q.number || String(i + 1))}</span>
                     <div class="question-actions">
-                        <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${q.id}'); reviewExam();" title="Favorite">✦</button>
-                        <button class="icon-btn" onclick="showLocation('${q.batchName}', '${q.number || i+1}', '${q.pageNumber}')" title="Location">📍</button>
+                        <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${escapeJs(q.id)}'); reviewExam();" title="Favorite">✦</button>
+                        <button class="icon-btn" onclick="showLocation('${escapeJs(q.subjectName)}', '${escapeJs(q.lectureName)}', '${escapeJs(q.batchName)}', '${escapeJs(q.number)}', '${escapeJs(q.pageNumber)}')" title="Location">📍</button>
                     </div>
-                    <span style="color: ${isCorrect ? 'var(--success)' : 'var(--danger)'}; font-weight:600">
-                        ${isCorrect ? '✓ Correct' : '✗ Wrong'}
-                    </span>
+                    <span style="color:${isCorrect ? 'var(--success)' : 'var(--danger)'}; font-weight:600">${isCorrect ? '✓ Correct' : '✗ Wrong'}</span>
                 </div>
-                <p class="question-text">${q.text}</p>
+                <p class="question-text">${escapeHtml(q.text)}</p>
                 <div class="options-list">
                     ${q.shuffledOptions.map((opt, oi) => {
                         let cls = 'option-btn';
                         if (oi === correctIdx) cls += ' correct';
                         if (oi === userAnswerIdx && oi !== correctIdx) cls += ' wrong';
-                        return `<div class="${cls}" style="cursor:default">${opt}</div>`;
+                        return `<div class="${cls}" style="cursor:default">${escapeHtml(opt)}</div>`;
                     }).join('')}
                 </div>
-                <div class="explanation-box visible">
-                    <strong>Explanation:</strong> ${q.explanation}
-                </div>
+                <div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(q.explanation || 'No explanation available.')}</div>
             </div>
         `;
     });
-
     reviewDiv.innerHTML = html;
 }
 
-// ============================================
-// SEARCH, READONLY, WRONG, FAVORITES (مختصر)
-// ============================================
 function populateSearchFilter() {
     const filter = document.getElementById('search-filter');
-    filter.innerHTML = '<option value="all">All Years</option>';
-    allYears.forEach(y => {
-        filter.innerHTML += `<option value="${y.name}">${y.name}</option>`;
-    });
+    filter.innerHTML = '<option value="all">All Subjects</option>';
+    Object.values(subjectCatalog)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(subject => {
+            filter.innerHTML += `<option value="${escapeHtml(subject.slug)}">${escapeHtml(subject.name)}</option>`;
+        });
 }
 
 function performSearch() {
     const query = document.getElementById('search-input').value.toLowerCase().trim();
     const filter = document.getElementById('search-filter').value;
     const resultsDiv = document.getElementById('search-results');
+    readonlyReturnTo = 'search';
 
     if (query.length < 2) {
         resultsDiv.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:20px;">Type at least 2 characters to search...</p>';
         return;
     }
 
-    let results = allQuestions.filter(q => {
-        const searchText = (q.text + ' ' + q.optionsRaw.join(' ') + ' ' + q.explanation).toLowerCase();
-        const matchesQuery = searchText.includes(query);
-        const matchesFilter = filter === 'all' || q.batchName.includes(filter) || q.groupName.includes(filter);
-        return matchesQuery && matchesFilter;
+    const results = allQuestions.filter(q => {
+        const haystack = `${q.text} ${q.optionsRaw.join(' ')} ${q.explanation}`.toLowerCase();
+        const subjectMatch = filter === 'all' || q.subjectSlug === filter;
+        return haystack.includes(query) && subjectMatch;
     });
 
-    if (results.length === 0) {
+    if (!results.length) {
         resultsDiv.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:20px;">No results found.</p>';
         return;
     }
 
     resultsDiv.innerHTML = results.slice(0, 50).map(q => `
-        <div class="search-result-item" onclick="openReadonly('${q.id}')">
-            <p><strong>Q${q.number}:</strong> ${q.text.substring(0, 120)}${q.text.length > 120 ? '...' : ''}</p>
-            <div class="search-result-meta">
-                📍 ${q.batchName} · Question ${q.number} · ${q.pageNumber}
-            </div>
+        <div class="search-result-item" onclick="openReadonly('${escapeJs(q.id)}')">
+            <p><strong>${escapeHtml(q.subjectName)} · ${escapeHtml(q.lectureName)} · Q${escapeHtml(q.number)}</strong> — ${escapeHtml(q.text.substring(0, 120))}${q.text.length > 120 ? '...' : ''}</p>
+            <div class="search-result-meta">📍 ${escapeHtml(q.batchName || 'No batch')} · ${escapeHtml(q.pageNumber || '')}</div>
         </div>
     `).join('');
 }
@@ -1042,612 +1217,69 @@ function openReadonly(questionId) {
     if (!question) return;
 
     const shuffled = shuffleOptions(question);
-    showScreen('readonly-screen');
-    const content = document.getElementById('readonly-content');
     const isFav = favorites.includes(question.id);
     const correctIdx = shuffled.shuffledOptions.findIndex(opt => opt.substring(2).trim() === question.correctAnswerText);
+    showScreen('readonly-screen');
 
-    content.innerHTML = `
+    document.getElementById('readonly-content').innerHTML = `
         <div class="question-header">
-            <span class="question-number">Question ${question.number}</span>
+            <span class="question-number">Question ${escapeHtml(question.number)}</span>
             <div class="question-actions">
-                <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${question.id}'); openReadonly('${question.id}');" title="Favorite">✦</button>
-                <button class="icon-btn" onclick="showLocation('${question.batchName}', '${question.number}', '${question.pageNumber}')" title="Location">📍</button>
+                <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${escapeJs(question.id)}'); openReadonly('${escapeJs(question.id)}');" title="Favorite">✦</button>
+                <button class="icon-btn" onclick="showLocation('${escapeJs(question.subjectName)}', '${escapeJs(question.lectureName)}', '${escapeJs(question.batchName)}', '${escapeJs(question.number)}', '${escapeJs(question.pageNumber)}')" title="Location">📍</button>
             </div>
         </div>
-        <p class="question-text">${question.text}</p>
+        <p class="question-text">${escapeHtml(question.text)}</p>
         <div class="options-list">
-            ${shuffled.shuffledOptions.map((opt, i) => `
-                <div class="option-btn ${i === correctIdx ? 'correct' : ''}" style="cursor:default">${opt}</div>
-            `).join('')}
+            ${shuffled.shuffledOptions.map((opt, i) => `<div class="option-btn ${i === correctIdx ? 'correct' : ''}" style="cursor:default">${escapeHtml(opt)}</div>`).join('')}
         </div>
-        <div class="explanation-box visible">
-            <strong>Explanation:</strong> ${question.explanation}
-        </div>
+        <div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(question.explanation || 'No explanation available.')}</div>
         <div class="mt-20" style="color:var(--text-light); font-size:0.9rem; padding:12px; background:var(--border-light); border-radius:var(--radius-sm);">
-            <p><strong>Batch:</strong> ${question.batchName}</p>
-            <p><strong>Page:</strong> ${question.pageNumber}</p>
+            <p><strong>Subject:</strong> ${escapeHtml(question.subjectName)}</p>
+            <p><strong>Lecture:</strong> ${escapeHtml(question.lectureName || '—')}</p>
+            <p><strong>Batch:</strong> ${escapeHtml(question.batchName || '—')}</p>
+            <p><strong>Page:</strong> ${escapeHtml(question.pageNumber || '—')}</p>
+            <p><strong>Source:</strong> ${escapeHtml(question.source)}</p>
         </div>
     `;
 }
 
 function closeReadonly() {
-    if (document.getElementById('search-input') && document.getElementById('search-input').value) {
-        showScreen('search-screen');
-    } else {
-        goHome();
-    }
+    if (readonlyReturnTo === 'search') showScreen('search-screen');
+    else if (readonlyReturnTo === 'wrong' || readonlyReturnTo === 'favorites') reopenCurrentQuestionList();
+    else goHome();
 }
 
 function openWrongQuestions() {
     const questions = allQuestions.filter(q => wrongQuestions.includes(q.id));
-    if (questions.length === 0) {
+    if (!questions.length) {
         showToast('No wrong questions yet!');
         return;
     }
+    currentQuestionListMode = 'wrong';
+    readonlyReturnTo = 'wrong';
     showQuestionListScreen(questions, 'Wrong Questions');
 }
 
 function openFavoriteQuestions() {
     const questions = allQuestions.filter(q => favorites.includes(q.id));
-    if (questions.length === 0) {
+    if (!questions.length) {
         showToast('No favorite questions yet!');
         return;
     }
+    currentQuestionListMode = 'favorites';
+    readonlyReturnTo = 'favorites';
     showQuestionListScreen(questions, 'Favorite Questions');
 }
 
+function reopenCurrentQuestionList() {
+    if (currentQuestionListMode === 'wrong') openWrongQuestions();
+    else if (currentQuestionListMode === 'favorites') openFavoriteQuestions();
+    else goHome();
+}
+
 function showQuestionListScreen(questions, title) {
+    selectionScreenReturnTo = 'home';
     showScreen('selection-screen');
     document.getElementById('selection-title').textContent = title;
-    document.getElementById('selection-search-container').classList.add('hidden');
-    const list = document.getElementById('selection-list');
-    list.innerHTML = '';
-    
-    questions.forEach((q, idx) => {
-        const item = document.createElement('div');
-        item.className = 'selection-item';
-        const shortText = q.text.length > 100 ? q.text.substring(0, 100) + '...' : q.text;
-        const isFav = favorites.includes(q.id);
-        item.innerHTML = `
-            <div style="flex:1; padding: 10px;">
-                <strong>Q${q.number}:</strong> ${shortText}
-                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:5px;">📚 ${q.batchName}</div>
-            </div>
-            <div class="question-actions" style="display:flex; gap:8px;">
-                <button class="icon-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${q.id}'); showQuestionListScreen(questions, '${title}');" title="Favorite">✦</button>
-                <button class="icon-btn" onclick="event.stopPropagation(); showLocation('${q.batchName}', '${q.number}', '${q.pageNumber}')" title="Location">📍</button>
-            </div>
-        `;
-        item.onclick = () => openReadonly(q.id);
-        list.appendChild(item);
-    });
-    
-    document.getElementById('selection-footer').classList.add('hidden');
-}
-
-function toggleFavorite(questionId) {
-    const idx = favorites.indexOf(questionId);
-    if (idx > -1) {
-        favorites.splice(idx, 1);
-    } else {
-        favorites.push(questionId);
-    }
-    saveFavorites();
-    // تحديث الشاشات
-    if (currentExam && !currentExam.submitted) renderExam();
-    else if (document.getElementById('readonly-screen').classList.contains('active')) {
-        const match = document.getElementById('readonly-content')?.innerHTML.match(/toggleFavorite\('([^']+)'/);
-        if (match) openReadonly(match[1]);
-    } else if (document.getElementById('selection-screen').classList.contains('active')) {
-        const title = document.getElementById('selection-title').textContent;
-        if (title === 'Wrong Questions') openWrongQuestions();
-        else if (title === 'Favorite Questions') openFavoriteQuestions();
-    }
-}
-
-function clearWrongQuestions() {
-    if (confirm('Clear all wrong questions?')) {
-        wrongQuestions = [];
-        saveWrongQuestions();
-        goHome();
-        showToast('Wrong questions cleared');
-    }
-}
-
-function clearFavorites() {
-    if (confirm('Clear all favorites?')) {
-        favorites = [];
-        saveFavorites();
-        goHome();
-        showToast('Favorites cleared');
-    }
-}
-
-// ============================================
-// SETTINGS AND STATISTICS (تم إصلاحهما)
-// ============================================
-function toggleSettings() {
-    const panel = document.getElementById('settings-panel');
-    if (panel) {
-        panel.classList.toggle('visible');
-        // إخفاء لوحة الإحصائيات إذا كانت مفتوحة
-        const statsPanel = document.getElementById('statistics-panel');
-        if (statsPanel && statsPanel.classList.contains('visible')) {
-            statsPanel.classList.remove('visible');
-        }
-    } else {
-        console.warn('settings-panel not found');
-    }
-}
-
-function toggleStatistics() {
-    const panel = document.getElementById('statistics-panel');
-    if (panel) {
-        panel.classList.toggle('visible');
-        if (panel.classList.contains('visible')) {
-            renderStatistics();
-            // إخفاء لوحة الإعدادات إذا كانت مفتوحة
-            const settingsPanel = document.getElementById('settings-panel');
-            if (settingsPanel && settingsPanel.classList.contains('visible')) {
-                settingsPanel.classList.remove('visible');
-            }
-        }
-    } else {
-        console.warn('statistics-panel not found');
-    }
-}
-
-function renderStatistics() {
-    const content = document.getElementById('stats-content');
-    if (!content) return;
-    let html = '<div style="display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between;">';
-
-    // قسم السنوات
-    html += '<div style="flex: 1; min-width: 280px; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">';
-    html += '<h4 style="color: var(--primary); margin-bottom: 16px;">📅 Years Statistics</h4>';
-    allYears.forEach(year => {
-        const key = `year-${year.name}`;
-        const prog = progress[key] || { questionIds: [] };
-        const total = year.questions.length;
-        const answered = prog.questionIds ? prog.questionIds.length : 0;
-        const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
-        html += `<div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-            <span style="font-weight: 500; font-size: 0.9rem;">${year.name}</span>
-            <span style="font-size: 0.85rem; color: var(--text-muted);">${answered}/${total} (${pct}%)</span>
-        </div>`;
-    });
-    const yearCompleted = allYears.filter(y => {
-        const prog = progress[`year-${y.name}`] || { questionIds: [] };
-        return prog.questionIds && prog.questionIds.length >= y.questions.length;
-    }).length;
-    const yearInProgress = allYears.filter(y => {
-        const prog = progress[`year-${y.name}`] || { questionIds: [] };
-        const answered = prog.questionIds ? prog.questionIds.length : 0;
-        return answered > 0 && answered < y.questions.length;
-    }).length;
-    const yearNotStarted = allYears.length - yearCompleted - yearInProgress;
-    const totalYears = allYears.length || 1;
-    const yearCompletedPct = (yearCompleted / totalYears) * 100;
-    const yearInProgressPct = (yearInProgress / totalYears) * 100;
-    html += `<div style="margin-top: 20px; display: flex; flex-direction: column; align-items: center;">
-        <div style="width: 150px; height: 150px; border-radius: 50%; background: conic-gradient(
-            var(--success) 0% ${yearCompletedPct}%,
-            var(--warning) ${yearCompletedPct}% ${yearCompletedPct + yearInProgressPct}%,
-            var(--border) ${yearCompletedPct + yearInProgressPct}% 100%
-        );"></div>
-        <div style="margin-top: 12px; display: flex; gap: 12px; font-size: 0.8rem;">
-            <span>✅ ${yearCompleted} Completed</span>
-            <span>🔄 ${yearInProgress} In Progress</span>
-            <span>⬜ ${yearNotStarted} Not Started</span>
-        </div>
-    </div>`;
-    html += '</div>';
-
-    // قسم المحاضرات
-    html += '<div style="flex: 1; min-width: 280px; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">';
-    html += '<h4 style="color: var(--primary); margin-bottom: 16px;">📚 Lectures Statistics</h4>';
-    allLectures.forEach(lecture => {
-        const key = `lecture-${lecture.name}`;
-        const prog = progress[key] || { questionIds: [] };
-        const total = lecture.questions.length;
-        const answered = prog.questionIds ? prog.questionIds.length : 0;
-        const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
-        html += `<div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-            <span style="font-weight: 500; font-size: 0.9rem;">${lecture.name}</span>
-            <span style="font-size: 0.85rem; color: var(--text-muted);">${answered}/${total} (${pct}%)</span>
-        </div>`;
-    });
-    const lectureCompleted = allLectures.filter(l => {
-        const prog = progress[`lecture-${l.name}`] || { questionIds: [] };
-        return prog.questionIds && prog.questionIds.length >= l.questions.length;
-    }).length;
-    const lectureInProgress = allLectures.filter(l => {
-        const prog = progress[`lecture-${l.name}`] || { questionIds: [] };
-        const answered = prog.questionIds ? prog.questionIds.length : 0;
-        return answered > 0 && answered < l.questions.length;
-    }).length;
-    const lectureNotStarted = allLectures.length - lectureCompleted - lectureInProgress;
-    const totalLectures = allLectures.length || 1;
-    const lectureCompletedPct = (lectureCompleted / totalLectures) * 100;
-    const lectureInProgressPct = (lectureInProgress / totalLectures) * 100;
-    html += `<div style="margin-top: 20px; display: flex; flex-direction: column; align-items: center;">
-        <div style="width: 150px; height: 150px; border-radius: 50%; background: conic-gradient(
-            var(--success) 0% ${lectureCompletedPct}%,
-            var(--warning) ${lectureCompletedPct}% ${lectureCompletedPct + lectureInProgressPct}%,
-            var(--border) ${lectureCompletedPct + lectureInProgressPct}% 100%
-        );"></div>
-        <div style="margin-top: 12px; display: flex; gap: 12px; font-size: 0.8rem;">
-            <span>✅ ${lectureCompleted} Completed</span>
-            <span>🔄 ${lectureInProgress} In Progress</span>
-            <span>⬜ ${lectureNotStarted} Not Started</span>
-        </div>
-    </div>`;
-    html += '</div>';
-    html += '</div>';
-    html += `<div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center;">
-        <span style="background: var(--border-light); padding: 8px 16px; border-radius: 20px;">⭐ ${favorites.length} Favorites</span>
-        <span style="background: var(--border-light); padding: 8px 16px; border-radius: 20px;">❌ ${wrongQuestions.length} Wrong</span>
-        <span style="background: var(--border-light); padding: 8px 16px; border-radius: 20px;">📋 ${allQuestions.length} Total Qs</span>
-    </div>`;
-    content.innerHTML = html;
-}
-
-function resetProgress() {
-    if (confirm('Are you sure you want to reset ALL personal progress?')) {
-        progress = {};
-        favorites = [];
-        wrongQuestions = [];
-        localStorage.removeItem('exam-progress');
-        localStorage.removeItem('exam-favorites');
-        localStorage.removeItem('exam-wrong');
-        localStorage.removeItem('exam-state');
-        showToast('Personal progress reset.');
-        if (document.getElementById('statistics-panel')?.classList.contains('visible')) renderStatistics();
-    }
-}
-
-// ============================================
-// EXAM SETTINGS BUTTON
-// ============================================
-function openExamSettings() {
-    const settingsPanel = document.getElementById('settings-panel');
-    if (settingsPanel) {
-        // إظهارها فوق كل شيء
-        settingsPanel.classList.toggle('visible');
-        if (settingsPanel.classList.contains('visible')) {
-            settingsPanel.style.zIndex = '2000';
-            // إخفاء لوحة الإحصائيات إذا كانت مفتوحة
-            const statsPanel = document.getElementById('statistics-panel');
-            if (statsPanel) statsPanel.classList.remove('visible');
-        } else {
-            settingsPanel.style.zIndex = '';
-        }
-    } else {
-        console.warn('settings-panel not found');
-    }
-}
-
-// ============================================
-// SETTINGS FUNCTIONS
-// ============================================
-function toggleDarkMode() {
-    const isDark = document.getElementById('dark-mode-toggle').checked;
-    document.documentElement.setAttribute('data-dark', isDark);
-    settings.darkMode = isDark;
-    saveSettings();
-}
-
-function changeTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    settings.theme = theme;
-    saveSettings();
-    updateStartButtonIcon();
-}
-
-function changeSound(sound) {
-    const audio = document.getElementById('bg-audio');
-    if (sound === 'none') {
-        audio.pause();
-        audio.src = '';
-    } else {
-        audio.src = `${sound}.mp3`;
-        audio.volume = (settings.volume || 50) / 100;
-        audio.play().catch(e => console.warn('Audio play failed'));
-    }
-    settings.bgSound = sound;
-    saveSettings();
-}
-
-function changeVolume(value) {
-    const audio = document.getElementById('bg-audio');
-    audio.volume = value / 100;
-    settings.volume = value;
-    saveSettings();
-}
-
-function toggleAnimations() {
-    const enabled = document.getElementById('animations-toggle').checked;
-    document.documentElement.setAttribute('data-animations', enabled);
-    settings.animations = enabled;
-    saveSettings();
-}
-
-function applySettings() {
-    const darkToggle = document.getElementById('dark-mode-toggle');
-    if (darkToggle) darkToggle.checked = settings.darkMode || false;
-    document.documentElement.setAttribute('data-dark', settings.darkMode || false);
-    
-    const themeSelector = document.getElementById('theme-selector');
-    if (themeSelector) themeSelector.value = settings.theme || 'default';
-    document.documentElement.setAttribute('data-theme', settings.theme || 'default');
-    
-    const soundSelector = document.getElementById('sound-selector');
-    if (soundSelector) soundSelector.value = settings.bgSound || 'none';
-    
-    const volumeControl = document.getElementById('volume-control');
-    if (volumeControl) volumeControl.value = settings.volume || 50;
-    
-    const animationsToggle = document.getElementById('animations-toggle');
-    if (animationsToggle) animationsToggle.checked = settings.animations !== false;
-    document.documentElement.setAttribute('data-animations', settings.animations !== false);
-    
-    updateStartButtonIcon();
-}
-
-function updateStartButtonIcon() {
-    const btn = document.getElementById('btn-start-exam');
-    if (!btn) return;
-    const theme = settings.theme || 'default';
-    const icons = { default:'🚀', glassmorphism:'✨', 'minimal-dark':'🌑', 'medical-blue':'💉', neon:'💡', paper:'📜', 'soft-ivory':'🕯️', hackers:'👨‍💻', ghost:'👻', beach:'🏖️', desert:'🏜️' };
-    btn.textContent = `${icons[theme] || '🚀'} Start Exam`;
-}
-
-// ============================================
-// CELEBRATION (موحدة)
-// ============================================
-function showCelebration() {
-    if (settings.animations === false) return;
-    const canvas = document.getElementById('fireworks-canvas');
-    canvas.classList.remove('hidden');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const particles = [];
-    const colors = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43'];
-
-    const bursts = [
-        { x: canvas.width * 0.3, y: canvas.height * 0.3 },
-        { x: canvas.width * 0.7, y: canvas.height * 0.4 },
-        { x: canvas.width * 0.5, y: canvas.height * 0.25 }
-    ];
-
-    bursts.forEach(burst => {
-        for (let i = 0; i < 40; i++) {
-            const angle = (Math.PI * 2 * i) / 40;
-            const speed = 3 + Math.random() * 5;
-            particles.push({
-                x: burst.x,
-                y: burst.y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                color: colors[Math.floor(Math.random() * colors.length)],
-                size: Math.random() * 3.5 + 1.5,
-                life: 1
-            });
-        }
-    });
-
-    let frame = 0;
-    function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        particles.forEach(p => {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.08;
-            p.life -= 0.012;
-            if (p.life > 0) {
-                ctx.globalAlpha = p.life;
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        });
-        frame++;
-        if (frame < 120) requestAnimationFrame(animate);
-        else { ctx.clearRect(0, 0, canvas.width, canvas.height); canvas.classList.add('hidden'); }
-    }
-    animate();
-}
-
-// ============================================
-// MODALS AND RESUME EXAM (تم إصلاح الاستئناف)
-// ============================================
-function buildModals() {
-    if (!document.getElementById('custom-modal')) {
-        const modalDiv = document.createElement('div');
-        modalDiv.id = 'custom-modal';
-        modalDiv.className = 'custom-modal hidden';
-        modalDiv.innerHTML = `
-            <div class="custom-modal-content">
-                <h3 id="modal-title"></h3>
-                <div id="modal-body"></div>
-                <div id="modal-buttons" class="modal-buttons"></div>
-            </div>
-        `;
-        document.body.appendChild(modalDiv);
-        
-        const style = document.createElement('style');
-        style.textContent = `
-            .custom-modal {
-                position: fixed;
-                top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.7);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10000;
-                backdrop-filter: blur(4px);
-            }
-            .custom-modal.hidden { display: none; }
-            .custom-modal-content {
-                background: var(--bg-card);
-                border-radius: var(--radius);
-                padding: 24px;
-                max-width: 400px;
-                width: 90%;
-                text-align: center;
-                box-shadow: var(--shadow-lg);
-                border: 1px solid var(--border);
-                direction: rtl;
-            }
-            .custom-modal-content h3 {
-                margin-bottom: 16px;
-                color: var(--primary);
-            }
-            .modal-buttons {
-                display: flex;
-                gap: 12px;
-                justify-content: center;
-                margin-top: 24px;
-                flex-wrap: wrap;
-            }
-            .modal-buttons button {
-                padding: 10px 20px;
-                border-radius: var(--radius-xs);
-                font-size: 0.9rem;
-                font-weight: 600;
-                cursor: pointer;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-}
-
-function checkResumeExam() {
-    try {
-        const saved = localStorage.getItem('exam-state');
-        if (saved) {
-            const savedExam = JSON.parse(saved);
-            if (savedExam && !savedExam.submitted) {
-                showResumeModal(savedExam);
-            } else {
-                clearExamState();
-            }
-        }
-    } catch(e) {
-        console.warn('Error parsing exam state', e);
-        clearExamState();
-    }
-}
-
-function showResumeModal(savedExam) {
-    const modal = document.getElementById('custom-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const modalBody = document.getElementById('modal-body');
-    const modalButtons = document.getElementById('modal-buttons');
-    
-    modalTitle.textContent = 'استئناف الامتحان';
-    modalBody.innerHTML = '<p>لديك امتحان غير مكتمل، هل تريد الاستمرار؟</p>';
-    modalButtons.innerHTML = `
-        <button class="btn-secondary" id="resume-no">لا</button>
-        <button class="btn-primary" id="resume-yes">نعم</button>
-    `;
-    modal.classList.remove('hidden');
-    
-    document.getElementById('resume-yes').onclick = () => {
-        modal.classList.add('hidden');
-        currentExam = savedExam;
-        // التأكد من أن الأسئلة تحتوي على shuffledOptions (قديمة من الحفظ) – إذا كانت مفقودة نعيد معالجتها
-        if (currentExam.questions && currentExam.questions.length > 0 && !currentExam.questions[0].shuffledOptions) {
-            // تم حفظ الامتحان بنسخة قديمة بدون shuffledOptions، نحتاج لإعادة معالجتها
-            currentExam.questions = currentExam.questions.map(q => {
-                if (!q.shuffledOptions) {
-                    const shuffled = shuffleOptions(q);
-                    return { ...q, shuffledOptions: shuffled.shuffledOptions, originalCorrectText: q.correctAnswerText };
-                }
-                return q;
-            });
-        }
-        showScreen('exam-screen');
-        renderExam();
-        if (currentExam.mode === 'exam') startTimer();
-    };
-    document.getElementById('resume-no').onclick = () => {
-        modal.classList.add('hidden');
-        clearExamState();
-        goHome();
-    };
-}
-
-// إضافة مستمع لمنع فقدان الحالة عند إعادة تحميل الصفحة
-window.addEventListener('beforeunload', (e) => {
-    if (currentExam && !currentExam.submitted) {
-        // تحذير عام (لا يمكن تخصيص الرسالة في المتصفحات الحديثة)
-        e.preventDefault();
-        e.returnValue = '';
-    }
-});
-
-// ============================================
-// LOCAL STORAGE
-// ============================================
-function saveSettings() { localStorage.setItem('exam-settings', JSON.stringify(settings)); }
-function loadSettings() { try { settings = JSON.parse(localStorage.getItem('exam-settings')) || {}; } catch { settings = {}; } }
-function saveProgress() {
-    if (!currentExam) return;
-    const { questions, firstAnswers } = currentExam;
-    questions.forEach((q, i) => {
-        if (firstAnswers[i] !== null) {
-            const key = `${q.source}-${q.groupName}`;
-            if (!progress[key]) progress[key] = { answered: 0, correct: 0, questionIds: [], correctIds: [] };
-            if (!progress[key].questionIds) progress[key].questionIds = [];
-            if (!progress[key].correctIds) progress[key].correctIds = [];
-            if (!progress[key].questionIds.includes(q.id)) {
-                progress[key].questionIds.push(q.id);
-                progress[key].answered = progress[key].questionIds.length;
-            }
-            const selectedText = q.shuffledOptions[firstAnswers[i]].substring(2).trim();
-            const isCorrect = (selectedText === q.originalCorrectText);
-            if (isCorrect && !progress[key].correctIds.includes(q.id)) {
-                progress[key].correctIds.push(q.id);
-                progress[key].correct = progress[key].correctIds.length;
-            }
-        }
-    });
-    localStorage.setItem('exam-progress', JSON.stringify(progress));
-}
-function loadProgress() { try { progress = JSON.parse(localStorage.getItem('exam-progress')) || {}; } catch { progress = {}; } }
-function saveFavorites() { localStorage.setItem('exam-favorites', JSON.stringify(favorites)); }
-function loadFavorites() { try { favorites = JSON.parse(localStorage.getItem('exam-favorites')) || []; } catch { favorites = []; } }
-function saveWrongQuestions() { localStorage.setItem('exam-wrong', JSON.stringify(wrongQuestions)); }
-function loadWrongQuestions() { try { wrongQuestions = JSON.parse(localStorage.getItem('exam-wrong')) || []; } catch { wrongQuestions = []; } }
-function saveExamState() { if (currentExam) localStorage.setItem('exam-state', JSON.stringify(currentExam)); }
-function clearExamState() { localStorage.removeItem('exam-state'); }
-
-// ============================================
-// UTILITIES
-// ============================================
-function shuffleArray(array) {
-    const arr = [...array];
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-}
-
-function showLocation(batch, number, page) { showToast(`${batch} · Q${number} · ${page}`); }
-
-function showToast(message) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.classList.remove('hidden');
-    toast.classList.add('visible');
-    setTimeout(() => {
-        toast.classList.remove('visible');
-        toast.classList.add('hidden');
-    }, 3000);
-    }
+   
