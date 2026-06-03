@@ -1,11 +1,11 @@
 /* ============================================
-   MEDICAL EXAM PRACTICE - FOLDER-BASED VERSION
-   Structure:
-   SubjectName/*.txt                -> Lectures
-   SubjectName/AI/*.txt             -> AI Lectures
-   Years are derived automatically from batch names found inside normal lecture files.
+   MEDICAL EXAM PRACTICE - MAIN JAVASCRIPT
+   Folder-based subjects + AI subfolders + auto-derived Years
    ============================================ */
 
+// ============================================
+// GLOBAL STATE
+// ============================================
 let subjectCatalog = {};
 let allLectures = [];
 let allYears = [];
@@ -16,18 +16,21 @@ let settings = {};
 let favorites = [];
 let wrongQuestions = [];
 let progress = {};
-let currentQuestionListMode = null;
+let timerInterval = null;
+
+// Navigation / screen state
 let currentSubjectSlug = null;
 let selectionScreenReturnTo = 'subjects';
 let readonlyReturnTo = 'home';
+let currentQuestionListMode = null;
 
+// Selection state
 let selectedGroups = [];
 let currentGroups = [];
 let selectedMode = null;
 let selectedDirection = null;
 let extraTime = 0;
 let extraTimeAdded = false;
-let timerInterval = null;
 
 const DEFAULT_SETTINGS = {
     darkMode: false,
@@ -46,6 +49,9 @@ const SOUND_MAP = {
     'rain-thunder': 'rain-thunder.mp3'
 };
 
+// ============================================
+// INITIALIZATION
+// ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
     loadProgress();
@@ -55,6 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     applySettings();
     displayRandomQuote();
     bindButtons();
+
     await loadData();
     checkResumeExam();
 });
@@ -78,21 +85,13 @@ function displayRandomQuote() {
     if (quoteEl) quoteEl.textContent = quotes[Math.floor(Math.random() * quotes.length)];
 }
 
-async function loadData() {
-    try {
-        subjectCatalog = await discoverSubjectsFromGitHub();
-        await loadSubjectData();
-        populateSearchFilter();
-        renderSubjects();
-    } catch (err) {
-        console.error('Error loading repo data:', err);
-        showToast('Error loading subject folders from GitHub.');
-    }
-}
-
+// ============================================
+// UTILITIES
+// ============================================
 function slugify(str = '') {
     return String(str)
-        .toLowerCase().trim()
+        .toLowerCase()
+        .trim()
         .replace(/\.txt$/i, '')
         .replace(/[\s_]+/g, '-')
         .replace(/[^a-z0-9\-\u0600-\u06FF]/gi, '-')
@@ -101,21 +100,69 @@ function slugify(str = '') {
 }
 
 function titleCaseSlug(slug = '') {
-    return slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return String(slug)
+        .replace(/[-_]+/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function escapeHtml(str = '') {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function escapeJs(str = '') {
+    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function shuffleArray(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
+function shuffleOptions(question) {
+    const opts = question.optionsRaw.map((opt, idx) => ({
+        idx,
+        letter: opt.charAt(0),
+        text: opt.substring(2).trim()
+    }));
+    for (let i = opts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [opts[i], opts[j]] = [opts[j], opts[i]];
+    }
+    const letters = ['A', 'B', 'C', 'D', 'E'];
+    const shuffledOptions = opts.map((opt, i) => `${letters[i]}) ${opt.text}`);
+    return {
+        shuffledOptions,
+        originalCorrectText: question.correctAnswerText
+    };
+}
+
+// ============================================
+// GITHUB / DATA DISCOVERY
+// ============================================
 function inferGitHubRepo() {
     const host = window.location.hostname;
-    const parts = window.location.pathname.split('/').filter(Boolean);
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+
     if (host.endsWith('github.io')) {
         const owner = host.replace('.github.io', '');
-        const repo = parts.length ? parts[0] : `${owner}.github.io`;
+        const repo = pathParts.length > 0 ? pathParts[0] : `${owner}.github.io`;
         return { owner, repo };
     }
+
     const owner = window.GITHUB_REPO_OWNER || '';
     const repo = window.GITHUB_REPO_NAME || '';
     if (owner && repo) return { owner, repo };
-    throw new Error('Custom domain detected. Please define window.GITHUB_REPO_OWNER and window.GITHUB_REPO_NAME once in index.html.');
+
+    throw new Error('Custom domain detected. Set window.GITHUB_REPO_OWNER and window.GITHUB_REPO_NAME in index.html.');
 }
 
 async function githubApi(url) {
@@ -124,44 +171,10 @@ async function githubApi(url) {
     return res.json();
 }
 
-async function discoverSubjectsFromGitHub() {
-    const { owner, repo } = inferGitHubRepo();
-    const repoMeta = await githubApi(`https://api.github.com/repos/${owner}/${repo}`);
-    const branch = repoMeta.default_branch;
-    const treeData = await githubApi(`https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
-    const tree = treeData.tree || [];
-
-    const catalog = {};
-    tree.forEach(item => {
-        if (item.type !== 'blob' || !/\.txt$/i.test(item.path)) return;
-        const parts = item.path.split('/');
-
-        // SUPPORT ONLY FOLDER-BASED SUBJECTS:
-        // Subject/Lecture1.txt
-        // Subject/AI/Lecture1.txt
-        if (parts.length === 2) {
-            const [subjectFolder, fileName] = parts;
-            if (!fileName.toLowerCase().endsWith('.txt')) return;
-            upsertSubject(catalog, subjectFolder);
-            catalog[slugify(subjectFolder)].lectureFiles.push({
-                path: item.path,
-                fileName,
-                rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${item.path}`
-            });
-        }
-        else if (parts.length === 3 && parts[1].toLowerCase() === 'ai') {
-            const [subjectFolder, _ai, fileName] = parts;
-            if (!fileName.toLowerCase().endsWith('.txt')) return;
-            upsertSubject(catalog, subjectFolder);
-            catalog[slugify(subjectFolder)].aiFiles.push({
-                path: item.path,
-                fileName,
-                rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${item.path}`
-            });
-        }
-    });
-
-    return catalog;
+async function fetchText(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+    return res.text();
 }
 
 function upsertSubject(catalog, folderName) {
@@ -180,6 +193,58 @@ function upsertSubject(catalog, folderName) {
     }
 }
 
+async function discoverSubjectsFromGitHub() {
+    const { owner, repo } = inferGitHubRepo();
+    const repoMeta = await githubApi(`https://api.github.com/repos/${owner}/${repo}`);
+    const branch = repoMeta.default_branch;
+    const treeData = await githubApi(`https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+    const tree = treeData.tree || [];
+
+    const catalog = {};
+
+    tree.forEach(item => {
+        if (item.type !== 'blob' || !/\.txt$/i.test(item.path)) return;
+
+        const parts = item.path.split('/');
+        // Allowed structure only:
+        // Subject/LectureName.txt
+        // Subject/AI/LectureName.txt
+        if (parts.length === 2) {
+            const [subjectFolder, fileName] = parts;
+            if (!/\.txt$/i.test(fileName)) return;
+            upsertSubject(catalog, subjectFolder);
+            catalog[slugify(subjectFolder)].lectureFiles.push({
+                rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${item.path}`,
+                fileName,
+                path: item.path
+            });
+        } else if (parts.length === 3 && parts[1].toLowerCase() === 'ai') {
+            const [subjectFolder, _ai, fileName] = parts;
+            if (!/\.txt$/i.test(fileName)) return;
+            upsertSubject(catalog, subjectFolder);
+            catalog[slugify(subjectFolder)].aiFiles.push({
+                rawUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${item.path}`,
+                fileName,
+                path: item.path
+            });
+        }
+    });
+
+    return catalog;
+}
+
+async function loadData() {
+    try {
+        subjectCatalog = await discoverSubjectsFromGitHub();
+        await loadSubjectData();
+        populateSearchFilter();
+        renderSubjects();
+    } catch (err) {
+        console.error('Error loading data:', err);
+        showToast('Error loading subject folders from GitHub.');
+    }
+}
+
 async function loadSubjectData() {
     allLectures = [];
     allYears = [];
@@ -187,7 +252,11 @@ async function loadSubjectData() {
     allQuestions = [];
 
     for (const subject of Object.values(subjectCatalog)) {
-        // Normal lecture files
+        subject.lectures = [];
+        subject.years = [];
+        subject.ai = [];
+
+        // Load normal lecture files.
         for (const file of subject.lectureFiles) {
             const text = await fetchText(file.rawUrl);
             const lectureName = file.fileName.replace(/\.txt$/i, '');
@@ -197,6 +266,7 @@ async function loadSubjectData() {
                 lectureName,
                 source: 'lecture'
             });
+
             const group = {
                 name: lectureName,
                 type: 'lecture',
@@ -204,6 +274,7 @@ async function loadSubjectData() {
                 subjectSlug: subject.slug,
                 questions
             };
+
             if (questions.length) {
                 subject.lectures.push(group);
                 allLectures.push(group);
@@ -211,31 +282,32 @@ async function loadSubjectData() {
             }
         }
 
-        // Derive Year/Batch groups only from normal lecture files
+        // Derive Years automatically from batch names found in lecture questions.
         const yearMap = {};
         subject.lectures.forEach(lectureGroup => {
-            lectureGroup.questions.forEach(q => {
-                if (!q.batchName) return;
-                if (!yearMap[q.batchName]) yearMap[q.batchName] = [];
-                yearMap[q.batchName].push({
-                    ...q,
+            lectureGroup.questions.forEach(question => {
+                if (!question.batchName) return;
+                if (!yearMap[question.batchName]) yearMap[question.batchName] = [];
+                yearMap[question.batchName].push({
+                    ...question,
                     source: 'year',
-                    groupName: q.batchName
+                    groupName: question.batchName
                 });
             });
         });
-        subject.years = Object.entries(yearMap)
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([batchName, questions]) => ({
+
+        subject.years = Object.keys(yearMap)
+            .sort((a, b) => a.localeCompare(b))
+            .map(batchName => ({
                 name: batchName,
                 type: 'year',
                 subjectName: subject.name,
                 subjectSlug: subject.slug,
-                questions
+                questions: yearMap[batchName]
             }));
         allYears.push(...subject.years);
 
-        // AI folder lecture files
+        // Load AI lecture files.
         for (const file of subject.aiFiles) {
             const text = await fetchText(file.rawUrl);
             const lectureName = file.fileName.replace(/\.txt$/i, '');
@@ -245,6 +317,7 @@ async function loadSubjectData() {
                 lectureName,
                 source: 'ai'
             });
+
             const group = {
                 name: lectureName,
                 type: 'ai',
@@ -252,6 +325,7 @@ async function loadSubjectData() {
                 subjectSlug: subject.slug,
                 questions
             };
+
             if (questions.length) {
                 subject.ai.push(group);
                 allAI.push(group);
@@ -262,55 +336,51 @@ async function loadSubjectData() {
         subject.counts.lectures = subject.lectures.length;
         subject.counts.years = subject.years.length;
         subject.counts.ai = subject.ai.length;
-        subject.counts.totalQuestions = [
-            ...subject.lectures.flatMap(g => g.questions),
-            ...subject.ai.flatMap(g => g.questions)
-        ].length;
+        subject.counts.totalQuestions = subject.lectures.reduce((sum, g) => sum + g.questions.length, 0) +
+                                        subject.ai.reduce((sum, g) => sum + g.questions.length, 0);
     }
 }
 
-async function fetchText(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch ${url}`);
-    return res.text();
-}
-
+// ============================================
+// TXT PARSING
+// ============================================
 function parseLectureTxt(text, ctx) {
     const normalized = String(text)
         .replace(/\r/g, '')
         .replace(/^﻿/, '')
-        .replace(/\n\s*\/\/\/\/\/[\s\S]*$/g, '\n')
         .trim();
 
     if (!normalized) return [];
 
-    const blocks = normalized
+    // Support files ending with ///// or users leaving separators.
+    const cleaned = normalized.replace(/\n\s*\/\/\/\/\/[\s\S]*$/g, '\n').trim();
+    const blocks = cleaned
         .split(/\n\s*###\s*\n|\n\s*###\s*$/g)
-        .map(b => b.trim())
+        .map(block => block.trim())
         .filter(Boolean);
 
     const questions = [];
-    let autoNumber = 1;
+    let fallbackNumber = 1;
 
     for (const block of blocks) {
-        const q = parseQuestionBlock(block, ctx, autoNumber);
+        const q = parseQuestionBlock(block, ctx, fallbackNumber);
         if (q) {
             questions.push(q);
-            autoNumber += 1;
+            fallbackNumber += 1;
         }
     }
+
     return questions;
 }
 
 function parseQuestionBlock(block, ctx, fallbackNumber) {
     try {
-        const rawLines = block.split('\n').map(line => line.trim()).filter(Boolean);
-        if (!rawLines.length) return null;
+        let lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+        if (!lines.length) return null;
 
-        let lines = [...rawLines];
-        // Remove repeated lecture title if present at block start
+        // Remove repeated lecture title at the top if present.
         if (lines[0].toLowerCase() === String(ctx.lectureName).toLowerCase()) {
-            lines.shift();
+            lines = lines.slice(1);
         }
         if (!lines.length) return null;
 
@@ -324,47 +394,47 @@ function parseQuestionBlock(block, ctx, fallbackNumber) {
         let batchName = '';
         let pageNumber = '';
 
-        // Optional "Question 9:" line
+        // Optional: Question 9:
         if (/^Question\s+\d+/i.test(lines[i])) {
             const match = lines[i].match(/^Question\s+(\d+)/i);
             questionNumber = match ? match[1] : '';
             i += 1;
         }
 
-        // Question text until options start
-        const qTextLines = [];
+        // Read question text until first option.
+        const questionLines = [];
         while (i < lines.length && !isOptionLine(lines[i]) && !/^Correct Answer:/i.test(lines[i])) {
-            qTextLines.push(lines[i].replace(/:$/, ''));
+            questionLines.push(lines[i].replace(/:$/, ''));
             i += 1;
         }
-        questionText = qTextLines.join(' ').trim();
+        questionText = questionLines.join(' ').trim();
         if (!questionText) return null;
 
-        // Options
+        // Read options.
         while (i < lines.length && isOptionLine(lines[i])) {
             options.push(normalizeOption(lines[i]));
             i += 1;
         }
         if (!options.length) return null;
 
-        // Correct answer
+        // Read correct answer.
         while (i < lines.length) {
             if (/^Correct Answer:/i.test(lines[i])) {
-                const answerRaw = lines[i].replace(/^Correct Answer:\s*/i, '').trim();
-                const letterMatch = answerRaw.match(/^([A-E])/i);
+                const raw = lines[i].replace(/^Correct Answer:\s*/i, '').trim();
+                const letterMatch = raw.match(/^([A-E])/i);
                 correctAnswerLetter = letterMatch ? letterMatch[1].toUpperCase() : '';
-                correctAnswerText = answerRaw.replace(/^[A-E][\)\.]?\s*/i, '').trim();
+                correctAnswerText = raw.replace(/^[A-E][\)\.]?\s*/i, '').trim();
                 i += 1;
                 break;
             }
             i += 1;
         }
         if (!correctAnswerText && correctAnswerLetter) {
-            const correctOption = options.find(opt => opt.startsWith(correctAnswerLetter + ')'));
-            if (correctOption) correctAnswerText = correctOption.substring(2).trim();
+            const hit = options.find(opt => opt.startsWith(correctAnswerLetter + ')'));
+            if (hit) correctAnswerText = hit.substring(2).trim();
         }
 
-        // Explanation if present
+        // Optional explanation.
         if (i < lines.length && /^Explanation:/i.test(lines[i])) {
             const explanationLines = [lines[i].replace(/^Explanation:\s*/i, '')];
             i += 1;
@@ -375,7 +445,7 @@ function parseQuestionBlock(block, ctx, fallbackNumber) {
             explanation = explanationLines.join(' ').trim();
         }
 
-        // trailing metadata: batch/page (optional)
+        // Trailing metadata.
         while (i < lines.length) {
             const line = lines[i];
             if (isPageLine(line)) pageNumber = line;
@@ -384,9 +454,8 @@ function parseQuestionBlock(block, ctx, fallbackNumber) {
         }
 
         const finalNumber = questionNumber || String(fallbackNumber);
-        const questionId = makeQuestionId(ctx, finalNumber, questionText);
         return {
-            id: questionId,
+            id: makeQuestionId(ctx, finalNumber, questionText),
             number: finalNumber,
             text: questionText,
             optionsRaw: options,
@@ -396,7 +465,7 @@ function parseQuestionBlock(block, ctx, fallbackNumber) {
             batchName,
             lectureName: ctx.lectureName,
             pageNumber,
-            groupName: ctx.source === 'year' ? batchName : ctx.lectureName,
+            groupName: ctx.lectureName,
             source: ctx.source,
             subjectName: ctx.subjectName,
             subjectSlug: ctx.subjectSlug
@@ -430,40 +499,16 @@ function isMetadataLine(line) {
     return isPageLine(line) || isBatchLine(line);
 }
 
-function makeQuestionId(ctx, number, questionText) {
+function makeQuestionId(ctx, questionNumber, questionText) {
     const fragment = slugify(questionText).slice(0, 40) || 'q';
-    return `${ctx.subjectSlug}__${ctx.source}__${slugify(ctx.lectureName)}__${number}__${fragment}`;
+    return `${ctx.subjectSlug}__${ctx.source}__${slugify(ctx.lectureName)}__${questionNumber}__${fragment}`;
 }
 
-function shuffleArray(arr) {
-    const copy = [...arr];
-    for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
-}
-
-function shuffleOptions(question) {
-    const options = question.optionsRaw.map((opt, idx) => ({
-        idx,
-        letter: opt.charAt(0),
-        text: opt.substring(2).trim()
-    }));
-    for (let i = options.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [options[i], options[j]] = [options[j], options[i]];
-    }
-    const letters = ['A', 'B', 'C', 'D', 'E'];
-    const shuffledOptions = options.map((opt, i) => `${letters[i]}) ${opt.text}`);
-    return {
-        shuffledOptions,
-        originalCorrectText: question.correctAnswerText
-    };
-}
-
+// ============================================
+// NAVIGATION / HOME
+// ============================================
 function showScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(screen => screen.classList.remove('active'));
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId)?.classList.add('active');
     document.getElementById('settings-panel')?.classList.remove('visible');
     document.getElementById('statistics-panel')?.classList.remove('visible');
@@ -475,18 +520,23 @@ function goHome() {
 }
 
 function openSection(section) {
-    if (section === 'exams') {
-        renderSubjects();
-        showSubjectsScreen();
-    } else if (section === 'wrong') {
-        openWrongQuestions();
-    } else if (section === 'favorites') {
-        openFavoriteQuestions();
-    } else if (section === 'search') {
-        readonlyReturnTo = 'search';
-        showScreen('search-screen');
-        document.getElementById('search-input').value = '';
-        document.getElementById('search-results').innerHTML = '';
+    switch (section) {
+        case 'exams':
+            renderSubjects();
+            showSubjectsScreen();
+            break;
+        case 'wrong':
+            openWrongQuestions();
+            break;
+        case 'favorites':
+            openFavoriteQuestions();
+            break;
+        case 'search':
+            readonlyReturnTo = 'search';
+            showScreen('search-screen');
+            document.getElementById('search-input').value = '';
+            document.getElementById('search-results').innerHTML = '';
+            break;
     }
 }
 
@@ -496,11 +546,21 @@ function showSubjectsScreen() {
 
 function renderSubjects() {
     const list = document.getElementById('subjects-list');
+    if (!list) return;
+
     const subjects = Object.values(subjectCatalog).sort((a, b) => a.name.localeCompare(b.name));
     if (!subjects.length) {
-        list.innerHTML = '<div class="selection-item"><div><strong>No subject folders found.</strong><br><small class="inline-note">Create folders like Surgery/, Ortho/, Anesthesia/ and put TXT lecture files inside.</small></div></div>';
+        list.innerHTML = `
+            <div class="selection-item">
+                <div>
+                    <strong>No subject folders found.</strong><br>
+                    <small class="inline-note">Create folders like Surgery/, Ortho/, Anesthesia/ and put TXT lecture files inside.</small>
+                </div>
+            </div>
+        `;
         return;
     }
+
     list.innerHTML = subjects.map(subject => `
         <div class="subject-choice-item" onclick="openSubjectModes('${escapeJs(subject.slug)}')">
             <div>
@@ -521,15 +581,16 @@ function openSubjectModes(subjectSlug) {
     currentSubjectSlug = subjectSlug;
     const subject = subjectCatalog[subjectSlug];
     if (!subject) return;
-    document.getElementById('subject-mode-title').textContent = subject.name;
 
+    document.getElementById('subject-mode-title').textContent = subject.name;
     const cards = [];
+
     if (subject.lectures.length) {
         cards.push(`
             <div class="subject-choice-item" onclick="openGroupsForSubject('${escapeJs(subjectSlug)}', 'lecture')">
                 <div>
                     <strong>Lectures</strong>
-                    <div class="meta">All lecture TXT files inside ${escapeHtml(subject.name)}/</div>
+                    <div class="meta">All TXT lecture files inside ${escapeHtml(subject.name)}/</div>
                 </div>
                 <div class="choice-arrow">›</div>
             </div>
@@ -540,7 +601,7 @@ function openSubjectModes(subjectSlug) {
             <div class="subject-choice-item" onclick="openGroupsForSubject('${escapeJs(subjectSlug)}', 'year')">
                 <div>
                     <strong>Years</strong>
-                    <div class="meta">Built automatically from detected batch names like Iris - 5</div>
+                    <div class="meta">Built automatically from batch names like Iris - 5 inside lecture files</div>
                 </div>
                 <div class="choice-arrow">›</div>
             </div>
@@ -551,7 +612,7 @@ function openSubjectModes(subjectSlug) {
             <div class="subject-choice-item" onclick="openGroupsForSubject('${escapeJs(subjectSlug)}', 'ai')">
                 <div>
                     <strong>AI</strong>
-                    <div class="meta">TXT files inside ${escapeHtml(subject.name)}/AI/</div>
+                    <div class="meta">TXT lecture files inside ${escapeHtml(subject.name)}/AI/</div>
                 </div>
                 <div class="choice-arrow">›</div>
             </div>
@@ -593,6 +654,9 @@ function backFromSelection() {
     else goHome();
 }
 
+// ============================================
+// SELECTION SCREEN
+// ============================================
 function resetSelectionState() {
     selectedGroups = [];
     currentGroups = [];
@@ -625,7 +689,7 @@ function showSelectionScreen(groups, title, enableSearch = false) {
         item.dataset.groupName = String(group.name || '').toLowerCase();
         item.innerHTML = `
             <input type="checkbox" id="group-${idx}" onchange="toggleGroupSelection(${idx})">
-            <label for="group-${idx}" style="cursor:pointer; width: 100%;">
+            <label for="group-${idx}" style="cursor:pointer; width:100%;">
                 <strong>${escapeHtml(group.name)}</strong>
                 <br><small style="color:var(--text-muted)">${group.questions.length} questions</small>
             </label>
@@ -649,16 +713,17 @@ function showSelectionScreen(groups, title, enableSearch = false) {
 }
 
 function filterSelectionList() {
-    const term = document.getElementById('selection-search').value.toLowerCase().trim();
-    document.querySelectorAll('#selection-list .selection-item').forEach(item => {
-        const name = item.dataset.groupName || '';
-        item.style.display = name.includes(term) ? '' : 'none';
+    const searchTerm = document.getElementById('selection-search').value.toLowerCase().trim();
+    const items = document.querySelectorAll('#selection-list .selection-item');
+    items.forEach(item => {
+        const groupName = item.dataset.groupName || '';
+        item.style.display = groupName.includes(searchTerm) ? '' : 'none';
     });
 }
 
 function toggleGroupSelection(idx) {
-    const existing = selectedGroups.indexOf(idx);
-    if (existing > -1) selectedGroups.splice(existing, 1);
+    const existingIdx = selectedGroups.indexOf(idx);
+    if (existingIdx > -1) selectedGroups.splice(existingIdx, 1);
     else selectedGroups.push(idx);
 
     document.querySelectorAll('#selection-list .selection-item').forEach((item, i) => {
@@ -667,6 +732,7 @@ function toggleGroupSelection(idx) {
         const cb = item.querySelector('input');
         if (cb) cb.checked = selected;
     });
+
     updateSelectionFooter();
 }
 
@@ -675,7 +741,7 @@ function updateSelectionFooter() {
     const totalQuestions = selectedGroups.reduce((sum, idx) => sum + currentGroups[idx].questions.length, 0);
     const input = document.getElementById('question-count-input');
 
-    if (selectedGroups.length) {
+    if (selectedGroups.length > 0) {
         footer.classList.remove('hidden');
         document.getElementById('selected-count').textContent = `${totalQuestions} questions selected`;
         input.max = totalQuestions;
@@ -703,32 +769,40 @@ function onQuestionCountChange() {
     if (value < 1) value = 1;
     if (max && value > max) value = max;
     input.value = value;
+
     if (selectedMode === 'exam' && selectedDirection) {
         document.getElementById('base-time-display').textContent = `${value} min`;
         document.getElementById('total-time-display').textContent = `${value + extraTime} min`;
     }
 }
 
+// ============================================
+// MODE / DIRECTION / START EXAM
+// ============================================
 function selectMode(mode) {
     selectedMode = mode;
     selectedDirection = null;
     extraTime = 0;
     extraTimeAdded = false;
+
     document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
     document.getElementById(mode === 'training' ? 'btn-training-mode' : 'btn-exam-mode').classList.add('active');
+
     document.getElementById('direction-selection').classList.remove('hidden');
     document.querySelectorAll('.btn-direction').forEach(b => b.classList.remove('active'));
+
     document.getElementById('timer-options').classList.add('hidden');
     document.getElementById('start-section').classList.add('hidden');
 }
 
 function selectDirection(direction) {
     selectedDirection = direction;
+
     document.querySelectorAll('.btn-direction').forEach(b => b.classList.remove('active'));
     document.getElementById(direction === 'oneway' ? 'btn-oneway' : 'btn-twoway').classList.add('active');
 
     if (selectedMode === 'exam') {
-        const count = parseInt(document.getElementById('question-count-input').value) || 0;
+        const count = parseInt(document.getElementById('question-count-input').value, 10) || 0;
         document.getElementById('base-time-display').textContent = `${count} min`;
         document.getElementById('extra-time-display').textContent = '+0 min';
         document.getElementById('total-time-display').textContent = `${count} min`;
@@ -741,6 +815,7 @@ function selectDirection(direction) {
     } else {
         document.getElementById('timer-options').classList.add('hidden');
     }
+
     document.getElementById('start-section').classList.remove('hidden');
 }
 
@@ -748,9 +823,11 @@ function addExtraTime() {
     if (extraTimeAdded) return;
     extraTime = 5;
     extraTimeAdded = true;
-    const count = parseInt(document.getElementById('question-count-input').value) || 0;
+
+    const count = parseInt(document.getElementById('question-count-input').value, 10) || 0;
     document.getElementById('extra-time-display').textContent = '+5 min';
     document.getElementById('total-time-display').textContent = `${count + 5} min`;
+
     const btn = document.getElementById('btn-add-extra');
     btn.disabled = true;
     btn.textContent = '✓ Extra 5 Minutes Added';
@@ -761,7 +838,8 @@ function confirmStartExam() {
         showToast('Please select mode and direction');
         return;
     }
-    const count = parseInt(document.getElementById('question-count-input').value);
+
+    const count = parseInt(document.getElementById('question-count-input').value, 10);
     if (!count || count < 1) {
         showToast('Please enter a valid number of questions');
         return;
@@ -771,11 +849,15 @@ function confirmStartExam() {
     selectedGroups.forEach(idx => {
         questions = questions.concat(currentGroups[idx].questions);
     });
-    questions = shuffleArray(questions).slice(0, count);
 
+    questions = shuffleArray(questions).slice(0, count);
     const processedQuestions = questions.map(q => {
         const shuffled = shuffleOptions(q);
-        return { ...q, shuffledOptions: shuffled.shuffledOptions, originalCorrectText: q.correctAnswerText };
+        return {
+            ...q,
+            shuffledOptions: shuffled.shuffledOptions,
+            originalCorrectText: q.correctAnswerText
+        };
     });
 
     currentExam = {
@@ -794,13 +876,19 @@ function confirmStartExam() {
     saveExamState();
     showScreen('exam-screen');
     renderExam();
+
     if (selectedMode === 'exam') startTimer();
 }
 
+// ============================================
+// EXAM RENDERING
+// ============================================
 function renderExam() {
     if (!currentExam) return;
+
     const { mode, questions, currentIndex, answers } = currentExam;
     const question = questions[currentIndex];
+
     const remaining = questions.length - currentIndex;
     let progressText = `${currentIndex + 1}/${questions.length}`;
 
@@ -811,22 +899,23 @@ function renderExam() {
             return selectedText === questions[i].originalCorrectText;
         }).length;
         const answered = currentExam.firstAnswers.filter(a => a !== null).length;
-        const pct = answered ? Math.round((correct / answered) * 100) : 0;
+        const pct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
         progressText += ` · ✓${correct} · ${pct}%`;
     } else {
         progressText += ` · ${remaining} left`;
     }
-
     document.getElementById('exam-progress').textContent = progressText;
-    renderGrid();
-    const isFav = favorites.includes(question.id);
 
-    document.getElementById('question-container').innerHTML = `
+    renderGrid();
+
+    const container = document.getElementById('question-container');
+    const isFav = favorites.includes(question.id);
+    container.innerHTML = `
         <div class="question-header">
             <span class="question-number">Q${escapeHtml(question.number || String(currentIndex + 1))}</span>
             <div class="question-actions">
                 <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${escapeJs(question.id)}')" title="Favorite">✦</button>
-                <button class="icon-btn" onclick="showLocation('${escapeJs(question.subjectName)}', '${escapeJs(question.lectureName)}', '${escapeJs(question.batchName)}', '${escapeJs(question.number)}', '${escapeJs(question.pageNumber)}')" title="Location">📍</button>
+                <button class="icon-btn" onclick="showLocation('${escapeJs(question.subjectName)}', '${escapeJs(question.lectureName)}', '${escapeJs(question.batchName)}', '${escapeJs(question.number || currentIndex + 1)}', '${escapeJs(question.pageNumber)}')" title="Location">📍</button>
                 <button class="icon-btn" onclick="openExamSettings()" title="Settings">⚙️</button>
             </div>
         </div>
@@ -848,12 +937,14 @@ function renderExam() {
         </div>
         <div class="mt-20 inline-note">Subject: ${escapeHtml(question.subjectName)} · Lecture: ${escapeHtml(question.lectureName || '—')} · Batch: ${escapeHtml(question.batchName || '—')}</div>
     `;
+
     renderExamNav();
 }
 
 function renderGrid() {
     const grid = document.getElementById('question-grid');
     const { questions, currentIndex, answers, mode, direction, firstAnswers } = currentExam;
+
     grid.innerHTML = '';
     questions.forEach((q, i) => {
         let cls = 'grid-btn';
@@ -886,9 +977,8 @@ function renderExamNav() {
 
     if (mode === 'training') {
         if (currentExam.showAnswer) {
-            html += currentIndex < questions.length - 1
-                ? '<button class="btn-primary" onclick="nextQuestion()">Next →</button>'
-                : '<button class="btn-primary" onclick="finishExam()">Finish</button>';
+            if (currentIndex < questions.length - 1) html += '<button class="btn-primary" onclick="nextQuestion()">Next →</button>';
+            else html += '<button class="btn-primary" onclick="finishExam()">Finish</button>';
         } else if (currentExam.answers[currentIndex] !== null) {
             html += '<button class="btn-small" onclick="showAnswer()">Show Answer</button>';
         } else {
@@ -896,16 +986,19 @@ function renderExamNav() {
         }
     } else {
         if (currentExam.answers[currentIndex] !== null) {
-            html += currentIndex < questions.length - 1
-                ? '<button class="btn-primary" onclick="nextQuestion()">Next →</button>'
-                : '<button class="btn-primary" onclick="finishExam()">Submit Exam</button>';
+            if (currentIndex < questions.length - 1) html += '<button class="btn-primary" onclick="nextQuestion()">Next →</button>';
+            else html += '<button class="btn-primary" onclick="finishExam()">Submit Exam</button>';
         } else {
             html += '<span></span>';
         }
     }
+
     nav.innerHTML = html;
 }
 
+// ============================================
+// EXAM INTERACTION
+// ============================================
 function selectOption(optionIndex) {
     if (!currentExam || currentExam.submitted) return;
     const { mode, currentIndex } = currentExam;
@@ -918,6 +1011,7 @@ function selectOption(optionIndex) {
         const question = currentExam.questions[currentIndex];
         const selectedText = question.shuffledOptions[optionIndex].substring(2).trim();
         const isCorrect = selectedText === question.originalCorrectText;
+
         if (isCorrect) {
             currentExam.showAnswer = true;
             showCelebration();
@@ -991,6 +1085,9 @@ function toggleGrid() {
     btn.innerHTML = grid.classList.contains('hidden') ? '<span>☰</span> Show Grid' : '<span>☰</span> Hide Grid';
 }
 
+// ============================================
+// EXIT / MODAL
+// ============================================
 function exitExam() {
     if (!currentExam || currentExam.submitted) {
         currentExam = null;
@@ -1023,22 +1120,29 @@ function showSaveProgressModal() {
     });
 }
 
+// ============================================
+// TIMER / RESULTS
+// ============================================
 function startTimer() {
     const timerEl = document.getElementById('exam-timer');
     timerEl.classList.remove('hidden');
     clearInterval(timerInterval);
+
     timerInterval = setInterval(() => {
         if (!currentExam || currentExam.submitted) {
             clearInterval(timerInterval);
             return;
         }
+
         const elapsed = Date.now() - currentExam.startTime;
         const remaining = currentExam.totalTime - elapsed;
+
         if (remaining <= 0) {
             clearInterval(timerInterval);
             timeUp();
             return;
         }
+
         const mins = Math.floor(remaining / 60000);
         const secs = Math.floor((remaining % 60000) / 1000);
         timerEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
@@ -1056,10 +1160,13 @@ function finishExam() {
     if (!currentExam) return;
     currentExam.submitted = true;
     currentExam.endTime = Date.now();
+
     clearInterval(timerInterval);
     timerInterval = null;
+
     saveProgress();
     clearExamState();
+
     if (currentExam.mode === 'exam') {
         showScreen('results-screen');
         showWaitingMessages();
@@ -1072,16 +1179,26 @@ function showWaitingMessages() {
     const waitDiv = document.getElementById('results-waiting');
     const contentDiv = document.getElementById('results-content');
     const msgEl = document.getElementById('waiting-message');
+
     waitDiv.classList.remove('hidden');
     contentDiv.innerHTML = '';
-    const messages = ['Processing your answers...', 'Calculating your score...', 'Analyzing your performance...', 'Almost there...', 'Preparing your results...'];
+
+    const messages = [
+        'Processing your answers...',
+        'Calculating your score...',
+        'Analyzing your performance...',
+        'Almost there...',
+        'Preparing your results...'
+    ];
+
     let idx = 0;
-    const interval = setInterval(() => {
+    const msgInterval = setInterval(() => {
         idx = (idx + 1) % messages.length;
         msgEl.textContent = messages[idx];
-    }, 1600);
+    }, 1500);
+
     setTimeout(() => {
-        clearInterval(interval);
+        clearInterval(msgInterval);
         waitDiv.classList.add('hidden');
         showResults();
     }, 3000);
@@ -1109,10 +1226,10 @@ function showResults() {
     });
 
     const incorrect = answeredCount - correct;
-    const score = total ? Math.round((correct / total) * 100) : 0;
-    const totalSeconds = endTime ? Math.round((endTime - startTime) / 1000) : 0;
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
+    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const timeSpent = endTime ? Math.round((endTime - startTime) / 1000) : 0;
+    const mins = Math.floor(timeSpent / 60);
+    const secs = timeSpent % 60;
 
     if (score > 50) showCelebration();
 
@@ -1152,9 +1269,9 @@ function reviewExam() {
                     <span class="question-number">Q${escapeHtml(q.number || String(i + 1))}</span>
                     <div class="question-actions">
                         <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${escapeJs(q.id)}'); reviewExam();" title="Favorite">✦</button>
-                        <button class="icon-btn" onclick="showLocation('${escapeJs(q.subjectName)}', '${escapeJs(q.lectureName)}', '${escapeJs(q.batchName)}', '${escapeJs(q.number)}', '${escapeJs(q.pageNumber)}')" title="Location">📍</button>
+                        <button class="icon-btn" onclick="showLocation('${escapeJs(q.subjectName)}', '${escapeJs(q.lectureName)}', '${escapeJs(q.batchName)}', '${escapeJs(q.number || i + 1)}', '${escapeJs(q.pageNumber)}')" title="Location">📍</button>
                     </div>
-                    <span style="color:${isCorrect ? 'var(--success)' : 'var(--danger)'}; font-weight:600">${isCorrect ? '✓ Correct' : '✗ Wrong'}</span>
+                    <span style="color: ${isCorrect ? 'var(--success)' : 'var(--danger)'}; font-weight:600">${isCorrect ? '✓ Correct' : '✗ Wrong'}</span>
                 </div>
                 <p class="question-text">${escapeHtml(q.text)}</p>
                 <div class="options-list">
@@ -1169,17 +1286,20 @@ function reviewExam() {
             </div>
         `;
     });
+
     reviewDiv.innerHTML = html;
 }
 
+// ============================================
+// SEARCH / READONLY / WRONG / FAVORITES
+// ============================================
 function populateSearchFilter() {
     const filter = document.getElementById('search-filter');
+    if (!filter) return;
     filter.innerHTML = '<option value="all">All Subjects</option>';
-    Object.values(subjectCatalog)
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach(subject => {
-            filter.innerHTML += `<option value="${escapeHtml(subject.slug)}">${escapeHtml(subject.name)}</option>`;
-        });
+    Object.values(subjectCatalog).sort((a, b) => a.name.localeCompare(b.name)).forEach(subject => {
+        filter.innerHTML += `<option value="${escapeHtml(subject.slug)}">${escapeHtml(subject.name)}</option>`;
+    });
 }
 
 function performSearch() {
@@ -1194,9 +1314,10 @@ function performSearch() {
     }
 
     const results = allQuestions.filter(q => {
-        const haystack = `${q.text} ${q.optionsRaw.join(' ')} ${q.explanation}`.toLowerCase();
-        const subjectMatch = filter === 'all' || q.subjectSlug === filter;
-        return haystack.includes(query) && subjectMatch;
+        const searchText = `${q.text} ${q.optionsRaw.join(' ')} ${q.explanation}`.toLowerCase();
+        const matchesQuery = searchText.includes(query);
+        const matchesFilter = filter === 'all' || q.subjectSlug === filter;
+        return matchesQuery && matchesFilter;
     });
 
     if (!results.length) {
@@ -1219,67 +1340,12 @@ function openReadonly(questionId) {
     const shuffled = shuffleOptions(question);
     const isFav = favorites.includes(question.id);
     const correctIdx = shuffled.shuffledOptions.findIndex(opt => opt.substring(2).trim() === question.correctAnswerText);
-    showScreen('readonly-screen');
 
-    document.getElementById('readonly-content').innerHTML = `
+    showScreen('readonly-screen');
+    const content = document.getElementById('readonly-content');
+    content.innerHTML = `
         <div class="question-header">
             <span class="question-number">Question ${escapeHtml(question.number)}</span>
             <div class="question-actions">
                 <button class="icon-btn ${isFav ? 'active' : ''}" onclick="toggleFavorite('${escapeJs(question.id)}'); openReadonly('${escapeJs(question.id)}');" title="Favorite">✦</button>
-                <button class="icon-btn" onclick="showLocation('${escapeJs(question.subjectName)}', '${escapeJs(question.lectureName)}', '${escapeJs(question.batchName)}', '${escapeJs(question.number)}', '${escapeJs(question.pageNumber)}')" title="Location">📍</button>
-            </div>
-        </div>
-        <p class="question-text">${escapeHtml(question.text)}</p>
-        <div class="options-list">
-            ${shuffled.shuffledOptions.map((opt, i) => `<div class="option-btn ${i === correctIdx ? 'correct' : ''}" style="cursor:default">${escapeHtml(opt)}</div>`).join('')}
-        </div>
-        <div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(question.explanation || 'No explanation available.')}</div>
-        <div class="mt-20" style="color:var(--text-light); font-size:0.9rem; padding:12px; background:var(--border-light); border-radius:var(--radius-sm);">
-            <p><strong>Subject:</strong> ${escapeHtml(question.subjectName)}</p>
-            <p><strong>Lecture:</strong> ${escapeHtml(question.lectureName || '—')}</p>
-            <p><strong>Batch:</strong> ${escapeHtml(question.batchName || '—')}</p>
-            <p><strong>Page:</strong> ${escapeHtml(question.pageNumber || '—')}</p>
-            <p><strong>Source:</strong> ${escapeHtml(question.source)}</p>
-        </div>
-    `;
-}
-
-function closeReadonly() {
-    if (readonlyReturnTo === 'search') showScreen('search-screen');
-    else if (readonlyReturnTo === 'wrong' || readonlyReturnTo === 'favorites') reopenCurrentQuestionList();
-    else goHome();
-}
-
-function openWrongQuestions() {
-    const questions = allQuestions.filter(q => wrongQuestions.includes(q.id));
-    if (!questions.length) {
-        showToast('No wrong questions yet!');
-        return;
-    }
-    currentQuestionListMode = 'wrong';
-    readonlyReturnTo = 'wrong';
-    showQuestionListScreen(questions, 'Wrong Questions');
-}
-
-function openFavoriteQuestions() {
-    const questions = allQuestions.filter(q => favorites.includes(q.id));
-    if (!questions.length) {
-        showToast('No favorite questions yet!');
-        return;
-    }
-    currentQuestionListMode = 'favorites';
-    readonlyReturnTo = 'favorites';
-    showQuestionListScreen(questions, 'Favorite Questions');
-}
-
-function reopenCurrentQuestionList() {
-    if (currentQuestionListMode === 'wrong') openWrongQuestions();
-    else if (currentQuestionListMode === 'favorites') openFavoriteQuestions();
-    else goHome();
-}
-
-function showQuestionListScreen(questions, title) {
-    selectionScreenReturnTo = 'home';
-    showScreen('selection-screen');
-    document.getElementById('selection-title').textContent = title;
-   
+                <button class="icon-btn" onclick="showLocation('${escapeJs(question.subjectName)}', '${escapeJs(question.lectureName)}', '${escapeJs(question.batchName)}', '${escapeJs(question.number)}', '${escapeJs(question.pageNu
