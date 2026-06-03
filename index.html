@@ -11,6 +11,7 @@
 </head>
 <body>
     <div id="app">
+        <!-- Home Screen -->
         <div id="home-screen" class="screen active">
             <div class="home-hero">
                 <h1 class="bismillah">بسم الله الرحمن الرحيم</h1>
@@ -22,19 +23,19 @@
             </div>
 
             <div class="nav-grid">
-                <button class="nav-btn" onclick="openSection('exams')">
+                <button class="nav-btn nav-btn--exams" onclick="openSection('exams')">
                     <div class="nav-icon-wrap"><span class="nav-icon">📝</span></div>
                     <span class="nav-label">Exams</span>
                 </button>
-                <button class="nav-btn" onclick="openSection('wrong')">
+                <button class="nav-btn nav-btn--wrong" onclick="openSection('wrong')">
                     <div class="nav-icon-wrap"><span class="nav-icon">❌</span></div>
                     <span class="nav-label">Wrong Questions</span>
                 </button>
-                <button class="nav-btn" onclick="openSection('favorites')">
+                <button class="nav-btn nav-btn--fav" onclick="openSection('favorites')">
                     <div class="nav-icon-wrap"><span class="nav-icon">⭐</span></div>
                     <span class="nav-label">Favorite Questions</span>
                 </button>
-                <button class="nav-btn" onclick="openSection('search')">
+                <button class="nav-btn nav-btn--search" onclick="openSection('search')">
                     <div class="nav-icon-wrap"><span class="nav-icon">🔍</span></div>
                     <span class="nav-label">Search</span>
                 </button>
@@ -113,6 +114,7 @@
             </div>
         </div>
 
+        <!-- Subjects Screen -->
         <div id="subjects-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="goHome()">← Back</button>
@@ -121,6 +123,7 @@
             <div id="subjects-list" class="selection-list"></div>
         </div>
 
+        <!-- Subject Mode Screen -->
         <div id="subject-mode-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="showSubjectsScreen()">← Back</button>
@@ -129,6 +132,7 @@
             <div id="subject-mode-list" class="selection-list"></div>
         </div>
 
+        <!-- Selection Screen -->
         <div id="selection-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="backFromSelection()">← Back</button>
@@ -194,6 +198,7 @@
             </div>
         </div>
 
+        <!-- Search Screen -->
         <div id="search-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="goHome()">← Back</button>
@@ -208,6 +213,7 @@
             <div id="search-results" class="search-results"></div>
         </div>
 
+        <!-- Exam Screen -->
         <div id="exam-screen" class="screen">
             <div class="exam-header">
                 <button class="btn-back" onclick="exitExam()">← Exit</button>
@@ -222,6 +228,7 @@
             <div id="exam-nav" class="exam-nav"></div>
         </div>
 
+        <!-- Results Screen -->
         <div id="results-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="goHome()">← Home</button>
@@ -235,6 +242,7 @@
             <div id="results-review" class="hidden"></div>
         </div>
 
+        <!-- Read-only Viewer -->
         <div id="readonly-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="closeReadonly()">← Back</button>
@@ -248,6 +256,12 @@
     <canvas id="fireworks-canvas" class="fireworks-canvas hidden"></canvas>
     <audio id="bg-audio" loop preload="auto"></audio>
 
+    <!-- If you use a custom domain, uncomment and set these:
+    <script>
+      window.GITHUB_REPO_OWNER = 'YOUR_GITHUB_USERNAME';
+      window.GITHUB_REPO_NAME = 'YOUR_REPOSITORY_NAME';
+    </script>
+    -->
     <script src="script.js"></script>
 </body>
 </html>
