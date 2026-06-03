@@ -11,7 +11,6 @@
 </head>
 <body>
     <div id="app">
-        <!-- Home Screen -->
         <div id="home-screen" class="screen active">
             <div class="home-hero">
                 <h1 class="bismillah">بسم الله الرحمن الرحيم</h1>
@@ -21,24 +20,21 @@
                     <div id="random-quote" class="app-subtitle"></div>
                 </div>
             </div>
+
             <div class="nav-grid">
-                <button class="nav-btn nav-btn--lectures" onclick="openSection('lectures')">
-                    <div class="nav-icon-wrap"><span class="nav-icon">📚</span></div>
-                    <span class="nav-label">By Lectures</span>
+                <button class="nav-btn" onclick="openSection('exams')">
+                    <div class="nav-icon-wrap"><span class="nav-icon">📝</span></div>
+                    <span class="nav-label">Exams</span>
                 </button>
-                <button class="nav-btn nav-btn--years" onclick="openSection('years')">
-                    <div class="nav-icon-wrap"><span class="nav-icon">📅</span></div>
-                    <span class="nav-label">By Years</span>
-                </button>
-                <button class="nav-btn nav-btn--wrong" onclick="openSection('wrong')">
+                <button class="nav-btn" onclick="openSection('wrong')">
                     <div class="nav-icon-wrap"><span class="nav-icon">❌</span></div>
                     <span class="nav-label">Wrong Questions</span>
                 </button>
-                <button class="nav-btn nav-btn--fav" onclick="openSection('favorites')">
+                <button class="nav-btn" onclick="openSection('favorites')">
                     <div class="nav-icon-wrap"><span class="nav-icon">⭐</span></div>
                     <span class="nav-label">Favorite Questions</span>
                 </button>
-                <button class="nav-btn nav-btn--search" onclick="openSection('search')">
+                <button class="nav-btn" onclick="openSection('search')">
                     <div class="nav-icon-wrap"><span class="nav-icon">🔍</span></div>
                     <span class="nav-label">Search</span>
                 </button>
@@ -117,13 +113,27 @@
             </div>
         </div>
 
-        <!-- Selection Screen مع حقل بحث المحاضرات -->
-        <div id="selection-screen" class="screen">
+        <div id="subjects-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="goHome()">← Back</button>
+                <h3>Exams</h3>
+            </div>
+            <div id="subjects-list" class="selection-list"></div>
+        </div>
+
+        <div id="subject-mode-screen" class="screen">
+            <div class="screen-header">
+                <button class="btn-back" onclick="showSubjectsScreen()">← Back</button>
+                <h3 id="subject-mode-title">Subject</h3>
+            </div>
+            <div id="subject-mode-list" class="selection-list"></div>
+        </div>
+
+        <div id="selection-screen" class="screen">
+            <div class="screen-header">
+                <button class="btn-back" onclick="backFromSelection()">← Back</button>
                 <h3 id="selection-title">Select</h3>
             </div>
-            <!-- حقل البحث (يظهر فقط في المحاضرات) -->
             <div id="selection-search-container" class="hidden" style="margin-bottom: 16px;">
                 <input type="text" id="selection-search" placeholder="ابحث عن اسم المحاضرة..." oninput="filterSelectionList()"
                        style="width:100%; padding:12px 16px; border:2px solid var(--border); border-radius:var(--radius-sm); font-size:1rem;">
@@ -137,7 +147,7 @@
                 <div class="question-count-control">
                     <label>Questions to attempt:</label>
                     <div class="count-input-wrap">
-                        <input type="number" id="question-count-input" min="1" value="1">
+                        <input type="number" id="question-count-input" min="1" value="1" oninput="onQuestionCountChange()">
                         <span id="max-questions-label">/ 0</span>
                     </div>
                 </div>
@@ -184,7 +194,6 @@
             </div>
         </div>
 
-        <!-- Search Screen -->
         <div id="search-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="goHome()">← Back</button>
@@ -193,13 +202,12 @@
             <div class="search-container">
                 <input type="text" id="search-input" placeholder="Search questions, options, explanations..." oninput="performSearch()">
                 <select id="search-filter" onchange="performSearch()">
-                    <option value="all">All Years</option>
+                    <option value="all">All Subjects</option>
                 </select>
             </div>
             <div id="search-results" class="search-results"></div>
         </div>
 
-        <!-- Exam Screen -->
         <div id="exam-screen" class="screen">
             <div class="exam-header">
                 <button class="btn-back" onclick="exitExam()">← Exit</button>
@@ -214,7 +222,6 @@
             <div id="exam-nav" class="exam-nav"></div>
         </div>
 
-        <!-- Results Screen -->
         <div id="results-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="goHome()">← Home</button>
@@ -228,7 +235,6 @@
             <div id="results-review" class="hidden"></div>
         </div>
 
-        <!-- Read-only Viewer -->
         <div id="readonly-screen" class="screen">
             <div class="screen-header">
                 <button class="btn-back" onclick="closeReadonly()">← Back</button>
@@ -244,4 +250,4 @@
 
     <script src="script.js"></script>
 </body>
-                </html>
+</html>
