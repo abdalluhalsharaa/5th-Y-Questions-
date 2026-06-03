@@ -1,0 +1,27 @@
+Appendicitis
+Question 1:
+A 35-year-old female presents with palpitations and is found to be in atrial 
+fibrillation. Her physical examination is unremarkable, and she has no history of 
+hypertension, diabetes, or vascular disease. What is her CHA₂DS₂-VASc score?
+A) 0
+B) 1
+C) 2
+D) 3
+E) 4
+Correct Answer: B) 1
+Explanation: The CHA₂DS₂-VASc score calculates stroke risk in atrial fibrillation. This patient 
+receives 1 point for female sex. Being under 65 with no other comorbidities (CHF, HTN, Diabetes, 
+Stroke, Vascular disease), she accumulates no further points.
+###
+Question 2:
+Which of the following clinical findings is NOT typically associated with severe 
+anemia?
+A) Diastolic murmur
+B) Systolic flow murmur
+C) Tachycardia
+D) Bounding pulses
+E) Elevated cardiac output
+Correct Answer: A) Diastolic murmur
+Explanation: Severe anemia causes a hyperdynamic circulatory state (high output), leading to 
+bounding pulses and systolic flow murmurs. Diastolic murmurs usually indicate structural valvular 
+pathology (e.g., aortic regurgitation) rather than flow issues.
