@@ -3,4 +3,4 @@ A. Levodopa/Carbidopa
 B. Haloperidol
 C. Emotional support (propranolol / primidone)
 D. Penicillamine
-Answer: C. Emotional support (and pharmacologically: propranolol or primidone)
+Correct Answer: C) Emotional support (and pharmacologically: propranolol or primidone)
