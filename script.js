@@ -119,7 +119,7 @@ function getCurrentBrowseSubjects(){
 }
 
 function setEmptyText(text, icon='📁'){ el('subjects-empty-text').textContent=text; const ic=el('subjects-empty').querySelector('.empty-icon'); if(ic) ic.textContent=icon; }
-function renderSubjects(){ const container=el('subjects-list'); const empty=el('subjects-empty'); if(!container||!empty) return; state.displayedSubjects=getCurrentBrowseSubjects(); const searchTerm=String(el('subjects-search')?el('subjects-search').value:'').trim().toLowerCase(); const t=theme(); const pinnedSet=new Set(state.subjectPreferences.pinned||[]); const visible=state.displayedSubjects.filter(s=>s.name.toLowerCase().includes(searchTerm)); const titleMap={all:'Subjects', favorites:'Favorite Questions', wrong:'Wrong Questions'}; el('subjects-screen-title').textContent=titleMap[state.browseMode] || 'Subjects'; if(!state.displayedSubjects.length){ empty.classList.remove('hidden'); container.innerHTML=''; if(state.browseMode==='wrong') setEmptyText('لا توجد أسئلة خاطئة حتى الآن.','❌'); else if(state.browseMode==='favorites') setEmptyText('لا توجد أسئلة مفضلة حتى الآن.','⭐'); else setEmptyText('لم يتم العثور على مواد بعد. تأكد من أن مجلدات المواد موجودة في المستودع.','📁'); return; } empty.classList.add('hidden'); container.innerHTML=visible.map(subject=>{ const pinned=pinnedSet.has(subject.id); return `<div class="subject-card${state.openSubjectActionId===subject.id?' actions-open':''}" data-subject-id="${subject.id}" onclick="handleSubjectOpen('${subject.id}',event)" onmousedown="startSubjectLongPress('${subject.id}')" ontouchstart="startSubjectLongPress('${subject.id}')" onmouseup="cancelSubjectLongPress()" onmouseleave="cancelSubjectLongPress()" ontouchend="cancelSubjectLongPress()" ontouchcancel="cancelSubjectLongPress()">${pinned?'<span class="subject-pin-badge">📌 مثبت</span>':''}<div class="subject-card-top"><div class="subject-icon-box">${t.icons.subject}</div><div class="subject-title-wrap"><div class="subject-badge-text">${escapeHtml(subject.name)}</div><div class="subject-subtitle">اضغط مطولاً للترتيب والتثبيت</div></div></div><div class="subject-meta"><div><span>${t.icons.lectures} الأقسام/الملفات</span><strong>${subject.totalLectures}</strong></div><div><span>${t.icons.progress} Questions</span><strong>${subject.totalQuestions}</strong></div><div><span>${t.icons.years} Years</span><strong>${subject.years.length}</strong></div></div>${state.browseMode==='all'?`<div class="subject-actions" onclick="event.stopPropagation()"><button class="subject-action-btn" onclick="moveSubject('${subject.id}','up')">⬆️ أعلى</button><button class="subject-action-btn" onclick="moveSubject('${subject.id}','down')">⬇️ أسفل</button><button class="subject-action-btn" onclick="togglePinSubject('${subject.id}')">${pinned?'📍 إلغاء التثبيت':'📌 تثبيت بالأعلى'}</button></div>`:''}</div>`; }).join(''); if(!visible.length) container.innerHTML='<div class="empty-state"><div class="empty-icon">🔎</div><p>لا توجد مواد مطابقة للبحث.</p></div>'; }
+function renderSubjects(){ const container=el('subjects-list'); const empty=el('subjects-empty'); if(!container||!empty) return; state.displayedSubjects=getCurrentBrowseSubjects(); const searchTerm=String(el('subjects-search')?el('subjects-search').value:'').trim().toLowerCase(); const t=theme(); const pinnedSet=new Set(state.subjectPreferences.pinned||[]); const visible=state.displayedSubjects.filter(s=>s.name.toLowerCase().includes(searchTerm)); const titleMap={all:'Subjects', favorites:'Favorite Questions', wrong:'Wrong Questions'}; el('subjects-screen-title').textContent=titleMap[state.browseMode] || 'Subjects'; if(!state.displayedSubjects.length){ empty.classList.remove('hidden'); container.innerHTML=''; if(state.browseMode==='wrong') setEmptyText('لا توجد أسئلة خاطئة حتى الآن.','❌'); else if(state.browseMode==='favorites') setEmptyText('لا توجد أسئلة مفضلة حتى الآن.','⭐'); else setEmptyText('التحميل جارٍ','🐦‍🔥'); return; } empty.classList.add('hidden'); container.innerHTML=visible.map(subject=>{ const pinned=pinnedSet.has(subject.id); return `<div class="subject-card${state.openSubjectActionId===subject.id?' actions-open':''}" data-subject-id="${subject.id}" onclick="handleSubjectOpen('${subject.id}',event)" onmousedown="startSubjectLongPress('${subject.id}')" ontouchstart="startSubjectLongPress('${subject.id}')" onmouseup="cancelSubjectLongPress()" onmouseleave="cancelSubjectLongPress()" ontouchend="cancelSubjectLongPress()" ontouchcancel="cancelSubjectLongPress()">${pinned?'<span class="subject-pin-badge">📌 مثبت</span>':''}<div class="subject-card-top"><div class="subject-icon-box">${t.icons.subject}</div><div class="subject-title-wrap"><div class="subject-badge-text">${escapeHtml(subject.name)}</div><div class="subject-subtitle">اضغط مطولاً للترتيب والتثبيت</div></div></div><div class="subject-meta"><div><span>${t.icons.lectures} الأقسام/الملفات</span><strong>${subject.totalLectures}</strong></div><div><span>${t.icons.progress} Questions</span><strong>${subject.totalQuestions}</strong></div><div><span>${t.icons.years} Years</span><strong>${subject.years.length}</strong></div></div>${state.browseMode==='all'?`<div class="subject-actions" onclick="event.stopPropagation()"><button class="subject-action-btn" onclick="moveSubject('${subject.id}','up')">⬆️ أعلى</button><button class="subject-action-btn" onclick="moveSubject('${subject.id}','down')">⬇️ أسفل</button><button class="subject-action-btn" onclick="togglePinSubject('${subject.id}')">${pinned?'📍 إلغاء التثبيت':'📌 تثبيت بالأعلى'}</button></div>`:''}</div>`; }).join(''); if(!visible.length) container.innerHTML='<div class="empty-state"><div class="empty-icon">🔎</div><p>لا توجد مواد مطابقة للبحث.</p></div>'; }
 function filterSubjects(){ renderSubjects(); }
 function openExams(){ state.browseMode='all'; renderSubjects(); showScreen('subjects-screen'); }
 function openSection(section){ if(section==='wrong'){ state.browseMode='wrong'; renderSubjects(); showScreen('subjects-screen'); } else if(section==='favorites'){ state.browseMode='favorites'; renderSubjects(); showScreen('subjects-screen'); } else if(section==='search'){ showScreen('search-screen'); el('search-input').value=''; el('search-results').innerHTML=''; } else openExams(); }
@@ -258,7 +258,63 @@ async function loadData(){ setEmptyText('التحميل جارٍ ...','⏳'); st
 window.addEventListener('DOMContentLoaded', async ()=>{
   loadSettings(); loadProgress(); loadFavorites(); loadWrongQuestions(); loadSubjectPreferences(); loadStatsSettings(); loadMemoryStores();
   applySettings();
-  const quotes=['لا توجد وصفة سحرية، ولا توجد طريقة ليس فيها العمل والتعب وبذل الجهد!','الفشل ليس النهاية، بل خطوة ضرورية نحو القمة إذا تعلمت منه.','العلم الذي تدرسه اليوم هو الأمل الذي ستمنحه لغيرك غدًا.','دراسة الطب ماراثون وليست سباقًا قصيرًا؛ واصل التقدم بهدوء.','ابدأ الآن، فالوقت المثالي لا يأتي وحده.'];
+  const quotes = [
+'لا توجد وصفة سحرية، ولا توجد طريقة ليس فيها العمل والتعب وبذل الجهد!',
+'الفشل ليس النهاية، بل خطوة ضرورية نحو القمة إذا تعلمت منه.',
+'العلم الذي تدرسه اليوم هو الأمل الذي ستمنحه لغيرك غدًا.',
+'دراسة الطب ماراثون وليست سباقًا قصيرًا؛ واصل التقدم بهدوء.',
+'ابدأ الآن، فالوقت المثالي لا يأتي وحده.',
+
+'اطلب العلم، فإن لم تنفعك شهادته نفعك أدبه.',
+'من جدَّ وجد، ومن زرع حصد.',
+'العلم يرفع بيوتًا لا عماد لها، والجهل يهدم بيت العز والشرف.',
+'ليس المجد أن لا تسقط، بل المجد أن تنهض كلما سقطت.',
+'تعب اليوم يصنع راحة الغد.',
+'العلم نور، ومن سار في النور بلغ غايته.',
+'لا تحسبن المجد تمرًا أنت آكله، لن تبلغ المجد حتى تلعق الصبر.',
+'كل ساعة دراسة تقرّبك خطوة من حلمك.',
+'النجاح مجموع جهود صغيرة تتكرر يومًا بعد يوم.',
+'إذا كانت الطريق طويلة فالعبرة بالاستمرار لا بالسرعة.',
+'العلم خير ميراث، والعمل خير شاهد.',
+'اجعل همك التعلم لا مجرد النجاح، فالنجاح يتبع المتعلمين.',
+'ما دام فيك نفس يتردد، ففرصة التفوق ما زالت قائمة.',
+'الطبيب العظيم كان يومًا طالبًا يراجع بصبر ويخطئ ويتعلم.',
+'دراسة الطب ليست اختبار ذكاء فقط، بل اختبار صبر وإرادة.',
+'من سار على الدرب وصل، ولو طال الطريق.',
+'الساعي إلى العلم كالساعي إلى كنز لا ينفد.',
+'لا تؤجل جهد اليوم إلى غدٍ فتجتمع عليك الأيام.',
+'كل صفحة تقرؤها اليوم تبني طبيبًا أفضل غدًا.',
+'العزيمة أقوى من الموهبة إذا استمرت ولم تتوقف.',
+'من طلب العلا سهر الليالي.',
+'إنما يدرك المجد من لا يرضى بالدون.',
+'العلم حياة للقلوب ونور للعقول.',
+'النجاح ليس حظًا، بل نتيجة الانضباط والتكرار.',
+'ازرع في كل يوم معرفة جديدة، تحصد مستقبلًا أعظم.',
+'قد يبدو التقدم بطيئًا، لكنه يظل أفضل من الوقوف.',
+'لا تيأس من كثرة المراجعة، فالصخور تُنحت بقطرات الماء.',
+'اجعل تعبك في طلب العلم، فثمرته تدوم أكثر من تعبك.',
+'خير الناس أنفعهم للناس، والعلم طريق إلى ذلك.',
+'وما نيل المطالب بالتمني، ولكن تؤخذ الدنيا غلابا.',
+
+'يَنالُكَ نَفعُهُ ما دُمتَ حَيّاً وَيَبقى ذُخرُهُ لَكَ إِن ذَهَبتا.',
+'تركُ النفوسِ بلا علمٍ ولا أدبٍ كتركِ المريضِ بلا طبٍّ ولا آسِ.',
+'شَكَوتُ إلى وَكيعٍ سُوءَ حِفظي فأرشدني إلى تركِ المعاصي، وأخبرني بأن العلمَ نورٌ ونورُ الله لا يُهدى لعاصي.',
+'إلى عِلمٍ تَكونُ بِهِ إماماً مُطاعاً إن نَهَيتَ وإن أَمَرتا.',
+'ما الفضلُ إلا لأهلِ العلمِ إنهمُ على الهُدى لمن استهدى أدلاءُ.',
+'ومن لم يذق مُرَّ التعلُّمِ ساعةً تجرَّع ذُلَّ الجهلِ طولَ حياتِهِ.',
+'فخذوا العلمَ على أعلامِهِ واطلبوا الحكمةَ عندَ الحكماءِ.',
+'إذا ما أقامَ العلمُ رايةَ أمةٍ فليس لها حتى القيامةِ ناكسُ.',
+'تنامُ بأمنٍ أمةٌ ملءَ جفنِها لها العلمُ إن لم يسهرِ السيفُ حارسُ.',
+'لسوفَ تَعَضُّ من ندمٍ عليها وما تُغني الندامةُ إن ندمتَ.',
+'إذا أبصرتَ صحبَكَ في سماءٍ قد ارتفعوا عليكَ وقد سَفلتا.',
+'إذا ما لم يُفِدكَ العلمُ خيراً فخيرٌ منه أن لو قد جهلتا.',
+'جعلتَ المالَ فوقَ العلمِ جهلاً، لعمركَ في القضيةِ ما عدلتا.',
+'وما يُغنيكَ تشييدُ المباني إذا بالجهلِ نفسَكَ قد هدمتَ.',
+'سينطقُ عنكَ علمُكَ في نَدِيٍّ ويُكتبُ عنكَ يوماً إن كتبتا.',
+'وسَلْ من ربِّكَ التوفيقَ فيها وأخلِصْ في السؤالِ إذا سألتا.',
+'وما الناسُ دونَ العلمِ إلا بظلمةٍ من الجهلِ لا مصباحَ فيها ولا نجمُ.',
+'العلمُ زينٌ فكن للعلمِ مكتسباً وكن له طالباً ما عشتَ مقتبساً.'
+];
   el('random-quote').textContent=quotes[Math.floor(Math.random()*quotes.length)];
   document.addEventListener('click',e=>{ if(!e.target.closest('.subject-card')) closeSubjectActions(); });
   primeAudioUnlock(); await prepareStaticEffectAudio();
