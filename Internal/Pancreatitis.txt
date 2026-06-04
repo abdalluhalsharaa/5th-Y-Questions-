@@ -1,0 +1,57 @@
+Pancreatitis
+Question 17:
+Which of the following is NOT a typical etiology of chronic pancreatitis?
+A) Gallstones
+B) Chronic alcohol abuse
+C) Cystic fibrosis
+D) Hereditary pancreatitis
+E) Autoimmune pancreatitis
+Correct Answer: A) Gallstones
+Explanation: Gallstones are the leading cause of acute pancreatitis but are rarely a primary cause 
+of chronic pancreatitis, which is most commonly caused by alcohol abuse.
+Vagus - 5
+P(136)
+###
+Question 60:
+A patient presents with acute abdominal pain. Serum amylase is elevated. Which 
+of the following conditions is associated with an elevated amylase but typically 
+normal serum lipase?
+A) Acute Pancreatitis
+B) Parotitis (Mumps)
+C) Intestinal ischemia
+D) Perforated peptic ulcer
+E) Pancreatic pseudocyst
+Correct Answer: B) Parotitis (Mumps)
+Explanation: Amylase is produced by both the pancreas and salivary glands. Parotitis causes 
+isolated hyperamylasemia (salivary origin). Lipase is specific to the pancreas and remains normal 
+in salivary gland pathology.
+Endorphin - 5
+P(47)
+###
+Question 15:
+Which of the following is NOT a recognized complication of acute pancreatitis?
+A) Hypercalcemia
+B) Pseudocyst formation
+C) Acute Respiratory Distress Syndrome (ARDS)
+D) Hypocalcemia
+E) Renal failure
+Correct Answer: A) Hypercalcemia
+Explanation: Hypocalcemia is a complication of pancreatitis (due to fat saponification). 
+Hypercalcemia is a potential cause of pancreatitis, not a result.
+Vagus - 5
+P(135)
+###
+Question 10:
+All of the following are recognized causes of acute pancreatitis EXCEPT:
+A) Chronic alcohol consumption
+B) Hypocalcemia
+C) Cholelithiasis (gallstones)
+D) Thiazide diuretics
+E) Mumps virus infection
+Correct Answer: B) Hypocalcemia
+Explanation: Hypercalcemia, not hypocalcemia, is a metabolic cause of acute pancreatitis. 
+Hypocalcemia is a potential complication of severe acute pancreatitis due to saponification of fats 
+in the peritoneum.
+Aorta - 5
+P(66)
+###
