@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Medical Exam Practice</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <div id="home-screen" class="screen active">
+      <div class="home-hero">
+        <h1 class="bismillah">بسم الله الرحمن الرحيم</h1>
+        <div class="logo-container">
+          <img src="logo.jpg" alt="Logo" class="app-logo" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
+          <div id="logo-fallback" style="display:none; font-size:3rem; margin-bottom:10px;">🩺</div>
+          <div id="random-quote" class="app-subtitle"></div>
+        </div>
+      </div>
+
+      <div class="nav-grid">
+        <button class="nav-btn" onclick="openExams()">
+          <div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-exams">📝</span></div>
+          <span class="nav-label" id="nav-label-exams">Exams</span>
+        </button>
+        <button class="nav-btn" onclick="openSection('wrong')">
+          <div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-wrong">❌</span></div>
+          <span class="nav-label" id="nav-label-wrong">Wrong Questions</span>
+        </button>
+        <button class="nav-btn" onclick="openSection('favorites')">
+          <div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-favorites">⭐</span></div>
+          <span class="nav-label" id="nav-label-favorites">Favorite Questions</span>
+        </button>
+        <button class="nav-btn" onclick="openSection('search')">
+          <div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-search">🔍</span></div>
+          <span class="nav-label" id="nav-label-search">Search</span>
+        </button>
+        <button class="nav-btn" onclick="toggleStatistics()">
+          <div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-statistics">📊</span></div>
+          <span class="nav-label" id="nav-label-statistics">Statistics</span>
+        </button>
+        <button class="nav-btn" onclick="toggleSettings()">
+          <div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-settings">⚙️</span></div>
+          <span class="nav-label" id="nav-label-settings">Settings</span>
+        </button>
+      </div>
+
+      <div id="statistics-panel" class="hidden-panel">
+        <div class="panel-header">
+          <h3 id="statistics-title">📊 الإحصائيات</h3>
+          <button class="btn-close" onclick="toggleStatistics()">✕</button>
+        </div>
+        <div id="stats-content"></div>
+        <div class="panel-actions">
+          <button class="btn-danger" onclick="resetProgress()">إعادة ضبط جميع البيانات</button>
+        </div>
+      </div>
+
+      <div id="settings-panel" class="hidden-panel">
+        <div class="panel-header">
+          <h3 id="settings-title">⚙️ الإعدادات</h3>
+          <button class="btn-close" onclick="toggleSettings()">✕</button>
+        </div>
+        <div class="setting-item">
+          <label>الوضع الداكن</label>
+          <label class="switch"><input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()"><span class="slider"></span></label>
+        </div>
+        <div class="setting-item">
+          <label>السمة</label>
+          <select id="theme-selector" onchange="changeTheme(this.value)">
+            <option value="default">الافتراضي</option>
+            <option value="desert">البادية</option>
+            <option value="space">الفضاء</option>
+            <option value="pirates">القراصنة</option>
+            <option value="castle">القلعة</option>
+            <option value="lab">المختبر</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>الصوت الخلفي</label>
+          <select id="sound-selector" onchange="changeSound(this.value)">
+            <option value="none">بدون صوت</option>
+            <option value="cafeteria">الكافيتيريا</option>
+            <option value="after-exam">بعد الامتحان</option>
+            <option value="beach">الشاطئ</option>
+            <option value="forest">الغابة</option>
+            <option value="fireplace">مدفأة حطب</option>
+            <option value="rain-thunder">أمطار رعدية</option>
+            <option value="rain-window">مطر على النافذة</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>تفعيل الصوت الخلفي</label>
+          <label class="switch"><input type="checkbox" id="bg-sound-enabled-toggle" onchange="toggleBackgroundSoundEnabled()"><span class="slider"></span></label>
+        </div>
+        <div class="setting-item">
+          <label>مستوى الصوت</label>
+          <input type="range" id="volume-control" min="0" max="100" value="50" oninput="changeVolume(this.value)">
+        </div>
+        <div class="setting-item">
+          <label>أصوات الإجابة الصحيحة والخاطئة</label>
+          <label class="switch"><input type="checkbox" id="feedback-toggle" onchange="toggleFeedbackSounds()"><span class="slider"></span></label>
+        </div>
+        <div class="setting-item">
+          <label>الحركات</label>
+          <label class="switch"><input type="checkbox" id="animations-toggle" onchange="toggleAnimations()"><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div id="subjects-screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="goHome()">← رجوع</button>
+        <h3 id="subjects-screen-title">Subjects</h3>
+      </div>
+      <div class="search-container compact-search">
+        <input type="text" id="subjects-search" placeholder="ابحث عن المادة..." oninput="filterSubjects()">
+      </div>
+      <div id="subjects-empty" class="empty-state hidden">
+        <div class="empty-icon">📁</div>
+        <p>لم يتم العثور على مواد بعد. تأكد من أن مجلدات المواد موجودة في المستودع.</p>
+      </div>
+      <div id="subjects-list" class="subject-grid"></div>
+    </div>
+
+    <div id="subject-sections-screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="openExams()">← رجوع</button>
+        <h3 id="subject-sections-title">Subject</h3>
+      </div>
+      <div id="subject-sections-summary" class="subject-summary"></div>
+      <div id="subject-categories" class="category-grid"></div>
+    </div>
+
+    <div id="selection-screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="backFromSelection()">← رجوع</button>
+        <h3 id="selection-title">Select</h3>
+      </div>
+      <div id="selection-search-container" class="search-container compact-search hidden">
+        <input type="text" id="selection-search" placeholder="ابحث..." oninput="filterSelectionList()">
+      </div>
+      <div id="selection-list" class="selection-list"></div>
+      <div id="selection-footer" class="selection-footer hidden">
+        <div class="footer-info"><p id="selected-count">0 questions selected</p></div>
+        <div class="question-count-control">
+          <label>عدد الأسئلة:</label>
+          <div class="count-input-wrap"><input type="number" id="question-count-input" min="1" value="1"><span id="max-questions-label">/ 0</span></div>
+        </div>
+        <div class="mode-selection">
+          <h4>اختر النمط</h4>
+          <div class="mode-buttons">
+            <button class="btn-mode" id="btn-training-mode" onclick="selectMode('training')"><span class="mode-icon">🎓</span><span class="mode-label">Training Mode</span></button>
+            <button class="btn-mode" id="btn-exam-mode" onclick="selectMode('exam')"><span class="mode-icon">📝</span><span class="mode-label">Real Exam Mode</span></button>
+          </div>
+        </div>
+        <div id="direction-selection" class="direction-selection hidden">
+          <h4>اتجاه التنقل</h4>
+          <div class="direction-buttons">
+            <button class="btn-direction" id="btn-oneway" onclick="selectDirection('oneway')"><span class="direction-icon">→</span><span class="direction-label">One Way</span><small>لا يمكن الرجوع</small></button>
+            <button class="btn-direction" id="btn-twoway" onclick="selectDirection('twoway')"><span class="direction-icon">↔</span><span class="direction-label">Two Way</span><small>يمكن مراجعة السابق</small></button>
+          </div>
+        </div>
+        <div id="timer-options" class="timer-options hidden">
+          <h4>إعدادات الوقت</h4>
+          <div class="timer-info">
+            <p>الوقت الأساسي: <strong id="base-time-display">0 min</strong></p>
+            <p>الوقت الإضافي: <strong id="extra-time-display">+0 min</strong></p>
+            <p>الإجمالي: <strong id="total-time-display">0 min</strong></p>
+          </div>
+          <button class="btn-extra-time" id="btn-add-extra" onclick="addExtraTime()">+ إضافة 5 دقائق</button>
+        </div>
+        <div id="start-section" class="start-section hidden"><button class="btn-start" id="btn-start-exam" onclick="confirmStartExam()">🚀 Start Exam</button></div>
+      </div>
+    </div>
+
+    <div id="search-screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="goHome()">← رجوع</button>
+        <h3>Search Questions</h3>
+      </div>
+      <div class="search-container">
+        <input type="text" id="search-input" placeholder="ابحث في السؤال أو الخيارات أو الشرح..." oninput="performSearch()">
+        <select id="search-filter" onchange="performSearch()"><option value="all">All Subjects</option></select>
+      </div>
+      <div id="search-results" class="search-results"></div>
+    </div>
+
+    <div id="exam-screen" class="screen">
+      <div class="exam-header">
+        <button class="btn-back" onclick="exitExam()">← Exit</button>
+        <div class="exam-header-right">
+          <div id="exam-timer" class="exam-timer hidden"></div>
+          <div id="exam-progress" class="exam-progress-badge"></div>
+        </div>
+      </div>
+      <div id="question-grid" class="question-grid"></div>
+      <div class="exam-tools-row">
+        <button class="btn-grid-toggle" id="btn-grid-toggle" onclick="toggleGrid()"><span>☰</span> إخفاء الشبكة</button>
+        <button class="btn-secondary btn-exam-settings" id="btn-exam-settings" onclick="toggleExamSettings(true)">⚙️ Exam Settings</button>
+      </div>
+      <div id="question-container" class="question-container"></div>
+      <div id="exam-nav" class="exam-nav"></div>
+    </div>
+
+    <div id="results-screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="goHome()">← Home</button>
+        <h3 id="results-title">Results</h3>
+      </div>
+      <div id="results-waiting" class="hidden"><div class="loading-spinner"></div><p id="waiting-message" class="waiting-msg">جاري تحليل الإجابات...</p></div>
+      <div id="results-content"></div>
+      <div id="results-review" class="hidden"></div>
+    </div>
+
+    <div id="readonly-screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="closeReadonly()">← رجوع</button>
+        <h3>Question Viewer</h3>
+      </div>
+      <div id="readonly-content"></div>
+    </div>
+  </div>
+
+  <div id="exam-settings-modal" class="modal-overlay hidden" onclick="handleExamSettingsOverlay(event)">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="panel-header modal-header"><h3 id="exam-settings-title">⚙️ Exam Settings</h3><button class="btn-close" onclick="toggleExamSettings(false)">✕</button></div>
+      <div class="setting-item"><label>السمة</label><select id="exam-theme-selector" onchange="changeTheme(this.value)"><option value="default">الافتراضي</option><option value="desert">البادية</option><option value="space">الفضاء</option><option value="pirates">القراصنة</option><option value="castle">القلعة</option><option value="lab">المختبر</option></select></div>
+      <div class="setting-item"><label>الصوت الخلفي</label><select id="exam-sound-selector" onchange="changeSound(this.value)"><option value="none">بدون صوت</option><option value="cafeteria">الكافيتيريا</option><option value="after-exam">بعد الامتحان</option><option value="beach">الشاطئ</option><option value="forest">الغابة</option><option value="fireplace">مدفأة حطب</option><option value="rain-thunder">أمطار رعدية</option><option value="rain-window">مطر على النافذة</option></select></div>
+      <div class="setting-item"><label>تفعيل الصوت الخلفي</label><label class="switch"><input type="checkbox" id="exam-bg-sound-enabled-toggle" onchange="toggleBackgroundSoundEnabled()"><span class="slider"></span></label></div>
+      <div class="setting-item"><label>مستوى الصوت</label><input type="range" id="exam-volume-control" min="0" max="100" value="50" oninput="changeVolume(this.value)"></div>
+      <div class="setting-item"><label>أصوات الإجابة الصحيحة والخاطئة</label><label class="switch"><input type="checkbox" id="exam-feedback-toggle" onchange="toggleFeedbackSounds()"><span class="slider"></span></label></div>
+    </div>
+  </div>
+
+  <div id="dialog-overlay" class="dialog-overlay hidden" onclick="handleDialogOverlay(event)">
+    <div class="dialog-card" role="dialog" aria-modal="true">
+      <div class="dialog-header">
+        <div id="dialog-title">تنبيه</div>
+        <button class="btn-close" onclick="hideDialog()">✕</button>
+      </div>
+      <div id="dialog-body" class="dialog-body"></div>
+      <div class="dialog-actions">
+        <button id="dialog-cancel" class="btn-secondary hidden" onclick="dialogCancelAction()">إلغاء</button>
+        <button id="dialog-confirm" class="btn-primary" onclick="dialogConfirmAction()">موافق</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <canvas id="fireworks-canvas" class="fireworks-canvas hidden"></canvas>
+
+  <audio id="bg-audio" preload="auto" loop></audio>
+  <audio id="right-audio" preload="auto"></audio>
+  <audio id="wrong-audio" preload="auto"></audio>
+  <audio id="celebrate-audio" preload="auto"></audio>
+
+  <script src="script.js"></script>
+</body>
+</html>
