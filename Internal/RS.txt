@@ -1,0 +1,25 @@
+RS
+Question 20:
+A patient is evaluated for suspected asthma. Which of the following spirometry 
+findings or clinical features is LEAST suggestive of a diagnosis of asthma?
+A) 200 ml and 12% increase in FEV1 after bronchodilator use
+B) Symptoms of chest tightness and wheezing worsening with exercise or cold 
+air
+C) An 8% increase in FEV1 after bronchodilator use
+D) Nocturnal awakening due to cough or wheeze
+E) Greater than 20% diurnal variation in peak expiratory flow
+Correct Answer: C) An 8% increase in FEV1 after bronchodilator use
+Explanation: Significant reversibility is defined as an increase in FEV1 of >12% AND >200ml. An 
+increase of only 8% is not considered significant for the diagnosis of asthma.
+###
+Question 18:
+The CURB-65 score is used to assess the severity of Community-Acquired 
+Pneumonia. Which of the following is NOT a component of this scoring system?
+A) Respiratory Rate ≥ 18 breaths/min
+B) Urea > 7 mmol/L (BUN > 19 mg/dL)
+C) Age ≥ 65 years
+D) Systolic BP < 90 mmHg or Diastolic BP ≤ 60 mmHg
+E) Confusion (new onset)
+Correct Answer: A) Respiratory Rate ≥ 18 breaths/min
+Explanation: The respiratory criteria for CURB-65 is a Respiratory Rate ≥ 30 breaths/min.
+###
