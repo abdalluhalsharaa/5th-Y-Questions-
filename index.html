@@ -45,7 +45,7 @@
 
       <div id="settings-panel" class="hidden-panel">
         <div class="panel-header"><h3 id="settings-title">⚙️ الإعدادات</h3><button class="btn-close" onclick="toggleSettings()">✕</button></div>
-        <div class="setting-item"><label>الوضع الداكن</label><label class="switch"><input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()"><span class="slider"></span></label></div>
+        <div id="dark-mode-setting" class="setting-item"><label>الوضع الداكن</label><label class="switch"><input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()"><span class="slider"></span></label></div>
         <div class="setting-item"><label>السمة</label><select id="theme-selector" onchange="changeTheme(this.value)"><option value="default">الافتراضي</option><option value="desert">البادية</option><option value="space">الفضاء</option><option value="pirates">القراصنة</option><option value="castle">القلعة</option><option value="lab">المختبر</option></select></div>
         <div class="setting-item"><label>الصوت الخلفي</label><select id="sound-selector" onchange="changeSound(this.value)"><option value="none">بدون صوت</option><option value="cafeteria">الكافيتيريا</option><option value="after-exam">بعد الامتحان</option><option value="beach">الشاطئ</option><option value="forest">الغابة</option><option value="fireplace">مدفأة حطب</option><option value="rain-thunder">أمطار رعدية</option><option value="rain-window">مطر على النافذة</option></select></div>
         <div class="setting-item"><label>تفعيل الصوت الخلفي</label><label class="switch"><input type="checkbox" id="bg-sound-enabled-toggle" onchange="toggleBackgroundSoundEnabled()"><span class="slider"></span></label></div>
@@ -172,5 +172,6 @@
   <audio id="wrong-audio" preload="auto"></audio>
   <audio id="celebrate-audio" preload="auto"></audio>
   <script src="script.js"></script>
+  <script src="script_patch.js"></script>
 </body>
 </html>
