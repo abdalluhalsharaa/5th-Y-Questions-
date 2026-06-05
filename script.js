@@ -4,7 +4,9 @@ const state = {
   currentExam: null, favorites: [], wrongQuestions: [], progress: {},
   settings: {}, subjectPreferences: { order: [], pinned: [] }, discoveredRepo: null,
   browseMode: 'all',
-  statsSettings: { lectures: true, years: true, ai: true },
+  statsExclusions: { excludedSubjects: [], excludedSections: { lectures: false, years: false, ai: false } },
+  subjectStatsSettings: {}, // key: subjectId, value: { lectures: true, years: true, ai: true }
+  resetSelectedSubjects: [],
   statsExpand: { subjects: {}, sections: {} },
   questionsFirstSeen: {}, examHistory: [], firstVisit: null,
   toastTimer: null, timerInterval: null, audioUnlocked: false, longPressTimer: null, openSubjectActionId: null,
@@ -13,7 +15,8 @@ const state = {
 const STORAGE_KEYS = {
   settings:'medical-app-settings-v11', progress:'medical-app-progress-v11', favorites:'medical-app-favorites-v11', wrong:'medical-app-wrong-v11',
   examState:'medical-app-exam-state-v11', subjectPrefs:'medical-app-subject-prefs-v11', statsPrefs:'medical-app-stats-prefs-v11',
-  questionLog:'medical-app-question-log-v11', examHistory:'medical-app-exam-history-v11', firstVisit:'medical-app-first-visit-v11'
+  questionLog:'medical-app-question-log-v11', examHistory:'medical-app-exam-history-v11', firstVisit:'medical-app-first-visit-v11',
+  statsExclusions:'medical-app-stats-exclusions-v1', subjectStatsSettings:'medical-app-subject-stats-settings-v1'
 };
 const DEFAULT_SETTINGS = { darkMode:false, theme:'default', bgSound:'none', bgSoundEnabled:true, volume:50, feedbackEnabled:true, animations:true };
 const IGNORE_ROOT_DIRS = new Set(['.git','.github','node_modules','assets','asset','audio','audios','img','images','css','js','docs','dist','build']);
@@ -65,8 +68,10 @@ function saveExamState(){ if(state.currentExam) localStorage.setItem(STORAGE_KEY
 function clearExamState(){ localStorage.removeItem(STORAGE_KEYS.examState); }
 function saveSubjectPreferences(){ localStorage.setItem(STORAGE_KEYS.subjectPrefs, JSON.stringify(state.subjectPreferences)); }
 function loadSubjectPreferences(){ state.subjectPreferences=Object.assign({order:[],pinned:[]}, loadJSON(STORAGE_KEYS.subjectPrefs, {})); }
-function saveStatsSettings(){ localStorage.setItem(STORAGE_KEYS.statsPrefs, JSON.stringify(state.statsSettings)); }
-function loadStatsSettings(){ state.statsSettings=Object.assign({lectures:true,years:true,ai:true}, loadJSON(STORAGE_KEYS.statsPrefs, {})); }
+function saveStatsExclusions(){ localStorage.setItem(STORAGE_KEYS.statsExclusions, JSON.stringify(state.statsExclusions)); }
+function loadStatsExclusions(){ state.statsExclusions=Object.assign({ excludedSubjects: [], excludedSections: { lectures: false, years: false, ai: false } }, loadJSON(STORAGE_KEYS.statsExclusions, {})); }
+function saveSubjectStatsSettings(){ localStorage.setItem(STORAGE_KEYS.subjectStatsSettings, JSON.stringify(state.subjectStatsSettings)); }
+function loadSubjectStatsSettings(){ state.subjectStatsSettings=loadJSON(STORAGE_KEYS.subjectStatsSettings, {}); }
 function saveMemoryStores(){ localStorage.setItem(STORAGE_KEYS.questionLog, JSON.stringify(state.questionsFirstSeen)); localStorage.setItem(STORAGE_KEYS.examHistory, JSON.stringify(state.examHistory)); if(state.firstVisit) localStorage.setItem(STORAGE_KEYS.firstVisit, String(state.firstVisit)); }
 function loadMemoryStores(){ state.questionsFirstSeen = loadJSON(STORAGE_KEYS.questionLog, {}); state.examHistory = loadJSON(STORAGE_KEYS.examHistory, []); const fv = localStorage.getItem(STORAGE_KEYS.firstVisit); state.firstVisit = fv ? Number(fv) : Date.now(); if(!fv) localStorage.setItem(STORAGE_KEYS.firstVisit, String(state.firstVisit)); }
 function addProgressId(key, qid){ if(!state.progress[key]) state.progress[key]={questionIds:[]}; if(!state.progress[key].questionIds.includes(qid)) state.progress[key].questionIds.push(qid); }
@@ -74,8 +79,8 @@ function addProgressId(key, qid){ if(!state.progress[key]) state.progress[key]={
 function normalizeSubjectPreferences(){ const ids=state.subjects.map(s=>s.id); state.subjectPreferences.order=(state.subjectPreferences.order||[]).filter(id=>ids.includes(id)); state.subjectPreferences.pinned=(state.subjectPreferences.pinned||[]).filter(id=>ids.includes(id)); ids.forEach(id=>{ if(!state.subjectPreferences.order.includes(id)) state.subjectPreferences.order.push(id); }); saveSubjectPreferences(); }
 function sortSubjects(list){ const orderMap=new Map(); (state.subjectPreferences.order||[]).forEach((id,idx)=>orderMap.set(id,idx)); const pinned=new Set(state.subjectPreferences.pinned||[]); return list.slice().sort((a,b)=>{ const ap=pinned.has(a.id)?1:0, bp=pinned.has(b.id)?1:0; if(ap!==bp) return bp-ap; const ao=orderMap.has(a.id)?orderMap.get(a.id):Number.MAX_SAFE_INTEGER; const bo=orderMap.has(b.id)?orderMap.get(b.id):Number.MAX_SAFE_INTEGER; if(ao!==bo) return ao-bo; return a.name.localeCompare(b.name,'en',{sensitivity:'base'}); }); }
 
-function applyThemeUI(){ const t=theme(); el('nav-icon-exams').textContent=t.icons.exams; el('nav-icon-wrong').textContent=t.icons.wrong; el('nav-icon-favorites').textContent=t.icons.favorites; el('nav-icon-search').textContent=t.icons.search; el('nav-icon-statistics').textContent=t.icons.statistics; el('nav-icon-settings').textContent=t.icons.settings; if(el('nav-icon-memories')) el('nav-icon-memories').textContent='📖'; el('statistics-title').textContent=t.texts.statsTitle; el('settings-title').textContent=t.texts.settingsTitle; el('exam-settings-title').textContent=t.texts.examSettingsTitle; el('btn-exam-settings').textContent=t.texts.examSettingsButton; el('btn-start-exam').textContent=t.texts.startExam; const a=document.querySelector('#btn-training-mode .mode-label'); const b=document.querySelector('#btn-exam-mode .mode-label'); if(a) a.textContent=t.texts.trainingLabel; if(b) b.textContent=t.texts.examLabel; }
-function syncSettingsControls(){ const entries=[['dark-mode-toggle','checked',!!state.settings.darkMode],['theme-selector','value',state.settings.theme],['exam-theme-selector','value',state.settings.theme],['sound-selector','value',state.settings.bgSound],['exam-sound-selector','value',state.settings.bgSound],['bg-sound-enabled-toggle','checked',state.settings.bgSoundEnabled!==false],['exam-bg-sound-enabled-toggle','checked',state.settings.bgSoundEnabled!==false],['volume-control','value',state.settings.volume],['exam-volume-control','value',state.settings.volume],['feedback-toggle','checked',state.settings.feedbackEnabled!==false],['exam-feedback-toggle','checked',state.settings.feedbackEnabled!==false],['animations-toggle','checked',state.settings.animations!==false],['stats-show-lectures','checked',state.statsSettings.lectures!==false],['stats-show-years','checked',state.statsSettings.years!==false],['stats-show-ai','checked',state.statsSettings.ai!==false]]; entries.forEach(([id,prop,val])=>{ const x=el(id); if(x) x[prop]=val; }); }
+function applyThemeUI(){ const t=theme(); el('nav-icon-exams').textContent=t.icons.exams; el('nav-icon-wrong').textContent=t.icons.wrong; el('nav-icon-favorites').textContent=t.icons.favorites; el('nav-icon-search').textContent=t.icons.search; el('nav-icon-statistics').textContent=t.icons.statistics; el('nav-icon-settings').textContent=t.icons.settings; if(el('nav-icon-memories')) el('nav-icon-memories').textContent='📖'; if(el('statistics-screen-title')) el('statistics-screen-title').textContent=t.texts.statsTitle; el('settings-title').textContent=t.texts.settingsTitle; el('exam-settings-title').textContent=t.texts.examSettingsTitle; if(el('btn-exam-settings')) el('btn-exam-settings').textContent=t.texts.examSettingsButton; if(el('btn-start-exam')) el('btn-start-exam').textContent=t.texts.startExam; const a=document.querySelector('#btn-training-mode .mode-label'); const b=document.querySelector('#btn-exam-mode .mode-label'); if(a) a.textContent=t.texts.trainingLabel; if(b) b.textContent=t.texts.examLabel; }
+function syncSettingsControls(){ const entries=[['dark-mode-toggle','checked',!!state.settings.darkMode],['theme-selector','value',state.settings.theme],['exam-theme-selector','value',state.settings.theme],['sound-selector','value',state.settings.bgSound],['exam-sound-selector','value',state.settings.bgSound],['bg-sound-enabled-toggle','checked',state.settings.bgSoundEnabled!==false],['exam-bg-sound-enabled-toggle','checked',state.settings.bgSoundEnabled!==false],['volume-control','value',state.settings.volume],['exam-volume-control','value',state.settings.volume],['feedback-toggle','checked',state.settings.feedbackEnabled!==false],['exam-feedback-toggle','checked',state.settings.feedbackEnabled!==false],['animations-toggle','checked',state.settings.animations!==false]]; entries.forEach(([id,prop,val])=>{ const x=el(id); if(x) x[prop]=val; }); }
 async function resolveAssetPath(candidates){ for(const item of candidates.filter(Boolean)){ try{ const u=encodeURI(item); const r=await fetch(u,{method:'HEAD'}); if(r.ok) return u; }catch(e){} } return encodeURI(candidates.find(Boolean)||''); }
 async function applyBackgroundSound(){ const audio=el('bg-audio'); if(!audio) return; audio.volume=(state.settings.volume||50)/100; const key=state.settings.bgSound||'none'; const sound=BACKGROUND_SOUNDS[key]||BACKGROUND_SOUNDS.none; if(!state.settings.bgSoundEnabled || key==='none' || !sound.file){ audio.pause(); return; } const src=await resolveAssetPath([sound.file,'audio/'+sound.file,'assets/audio/'+sound.file]); if(audio.dataset.currentSrc!==src){ audio.src=src; audio.dataset.currentSrc=src; audio.load(); } if(state.audioUnlocked) audio.play().catch(()=>{}); }
 function applyEffectAudioVolumes(){ ['right-audio','wrong-audio','celebrate-audio'].forEach(id=>{ const a=el(id); if(a) a.volume=(state.settings.volume||50)/100; }); }
@@ -85,7 +90,7 @@ function playEffectSound(kind){ if(!state.currentExam || state.currentExam.mode!
 function playCelebrateSound(){ const a=el('celebrate-audio'); if(!a||!a.src) return; try{ a.currentTime=0; a.play().catch(()=>{}); }catch(e){} }
 
 function applySettings(){ state.settings=Object.assign({},DEFAULT_SETTINGS,state.settings||{}); document.documentElement.setAttribute('data-dark', String(!!state.settings.darkMode)); document.documentElement.setAttribute('data-theme', state.settings.theme||'default'); document.documentElement.setAttribute('data-animations', String(state.settings.animations!==false)); syncSettingsControls(); applyThemeUI(); applyBackgroundSound(); applyEffectAudioVolumes(); }
-function changeTheme(name){ state.settings.theme = THEMES[name] ? name : 'default'; saveSettings(); applySettings(); renderSubjects(); if(state.currentSubject && el('subject-sections-screen').classList.contains('active')) openSubject(state.currentSubject.id); if(state.currentExam && el('exam-screen').classList.contains('active')) renderExam(); updateStatisticsIfOpen(); renderMemories(); }
+function changeTheme(name){ state.settings.theme = THEMES[name] ? name : 'default'; saveSettings(); applySettings(); renderSubjects(); if(state.currentSubject && el('subject-sections-screen').classList.contains('active')) openSubject(state.currentSubject.id); if(state.currentExam && el('exam-screen').classList.contains('active')) renderExam(); renderStatisticsPage(); renderMemories(); }
 function changeSound(name){ state.settings.bgSound = BACKGROUND_SOUNDS[name] ? name : 'none'; saveSettings(); applySettings(); }
 function changeVolume(v){ state.settings.volume=clampNum(parseInt(v,10),0,100,50); saveSettings(); applySettings(); }
 function toggleDarkMode(){ state.settings.darkMode=!!el('dark-mode-toggle').checked; saveSettings(); applySettings(); }
@@ -94,8 +99,6 @@ function toggleFeedbackSounds(){ const src=document.activeElement && (document.a
 function toggleAnimations(){ state.settings.animations=!!el('animations-toggle').checked; saveSettings(); applySettings(); }
 function toggleSettings(){ el('settings-panel').classList.toggle('visible'); }
 function toggleExamSettings(show){ el('exam-settings-modal').classList.toggle('hidden', !show); if(show) syncSettingsControls(); }
-function toggleStatisticsSettings(show){ el('stats-settings-modal').classList.toggle('hidden', !show); if(show) syncSettingsControls(); }
-function updateStatisticsType(kind, checked){ state.statsSettings[kind]=!!checked; saveStatsSettings(); syncSettingsControls(); updateStatisticsIfOpen(); }
 
 function showToast(message, kind='info', duration=2600){ const toast=el('toast'); clearTimeout(state.toastTimer); const prefix=(theme().icons[kind] || theme().icons.statistics || 'ℹ️'); toast.textContent=prefix+' '+message; toast.classList.remove('hidden'); toast.classList.add('visible'); state.toastTimer=setTimeout(()=>{ toast.classList.remove('visible'); toast.classList.add('hidden'); },duration); }
 function showDialog({title='تنبيه', message='', showCancel=false, confirmText='موافق', cancelText='إلغاء', onConfirm=null, onCancel=null}){ el('dialog-title').textContent=title; el('dialog-body').innerHTML=message; const cancel=el('dialog-cancel'); const confirm=el('dialog-confirm'); cancel.classList.toggle('hidden', !showCancel); cancel.textContent=cancelText; confirm.textContent=confirmText; state.dialog.onConfirm=onConfirm; state.dialog.onCancel=onCancel; el('dialog-overlay').classList.remove('hidden'); }
@@ -103,6 +106,314 @@ function hideDialog(){ el('dialog-overlay').classList.add('hidden'); state.dialo
 function dialogConfirmAction(){ const fn=state.dialog.onConfirm; hideDialog(); if(typeof fn==='function') fn(); }
 function dialogCancelAction(){ const fn=state.dialog.onCancel; hideDialog(); if(typeof fn==='function') fn(); }
 function askConfirm(message,onConfirm,onCancel){ showDialog({title:'تأكيد',message,showCancel:true,confirmText:'تأكيد',cancelText:'إلغاء',onConfirm,onCancel}); }
+
+// Statistics Helpers
+function getExcludedSubjectsSet(){ return new Set(state.statsExclusions.excludedSubjects); }
+function isSubjectExcluded(subjectId){ return getExcludedSubjectsSet().has(subjectId); }
+function isSectionExcluded(sectionType){ // 'lecture', 'year', 'ai'
+  const map = { lecture: 'lectures', year: 'years', ai: 'ai' };
+  const key = map[sectionType];
+  return state.statsExclusions.excludedSections[key] === true;
+}
+function getSubjectTotalQuestions(subject){
+  let total = 0;
+  if(!isSectionExcluded('lecture')) total += subject.lectures.reduce((s,g)=>s+g.questions.length,0);
+  if(!isSectionExcluded('year')) total += subject.years.reduce((s,g)=>s+g.questions.length,0);
+  if(!isSectionExcluded('ai')) total += subject.ai.reduce((s,g)=>s+g.questions.length,0);
+  return total;
+}
+function getSubjectAnsweredCount(subject){
+  const answeredSet = new Set();
+  const progressMap = state.progress;
+  const addKey = (key) => { const entry = progressMap[key]; if(entry && entry.questionIds) entry.questionIds.forEach(id=>answeredSet.add(id)); };
+  if(!isSectionExcluded('lecture')){
+    subject.lectures.forEach(g=> addKey(`lecture:${subject.name}/${g.name}`));
+  }
+  if(!isSectionExcluded('year')){
+    subject.years.forEach(g=> addKey(`year:${subject.name}/${g.name}`));
+  }
+  if(!isSectionExcluded('ai')){
+    subject.ai.forEach(g=> addKey(`ai:${subject.name}/${g.name}`));
+  }
+  return answeredSet.size;
+}
+function getGlobalStats(){
+  let totalQuestions = 0;
+  let answeredQuestions = 0;
+  const excludedSubjects = getExcludedSubjectsSet();
+  for(const subject of state.subjects){
+    if(excludedSubjects.has(subject.id)) continue;
+    const subjTotal = getSubjectTotalQuestions(subject);
+    const subjAnswered = getSubjectAnsweredCount(subject);
+    totalQuestions += subjTotal;
+    answeredQuestions += subjAnswered;
+  }
+  const percentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+  return { totalQuestions, answeredQuestions, percentage };
+}
+
+// New Statistics Page Functions
+function openStatisticsPage(){
+  renderStatisticsPage();
+  showScreen('statistics-screen');
+}
+function closeStatisticsPage(){
+  goHome();
+}
+function renderStatisticsPage(){
+  renderGlobalStats();
+  renderSubjectsStatsList();
+}
+function renderGlobalStats(){
+  const container = el('global-stats-container');
+  if(!container) return;
+  const { totalQuestions, answeredQuestions, percentage } = getGlobalStats();
+  const t = theme();
+  container.innerHTML = `
+    <div class="progress-card">
+      <h4>${t.icons.progress} إجمالي الأسئلة (بعد الاستثناءات)</h4>
+      <p><span>كل الأسئلة</span><strong>${totalQuestions}</strong></p>
+      <p><span>تمت الإجابة</span><strong>${answeredQuestions}</strong></p>
+      <div class="progress-bar"><span style="width:${percentage}%"></span></div>
+      <p><span>نسبة الإنجاز</span><strong>${percentage}%</strong></p>
+    </div>
+  `;
+}
+function renderSubjectsStatsList(){
+  const container = el('subjects-stats-list');
+  if(!container) return;
+  const excludedSubjects = getExcludedSubjectsSet();
+  const subjectsToShow = sortSubjects(state.subjects).filter(s => !excludedSubjects.has(s.id));
+  if(subjectsToShow.length === 0){
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>لا توجد مواد متاحة بعد تطبيق الاستثناءات.</p></div>';
+    return;
+  }
+  const t = theme();
+  container.innerHTML = subjectsToShow.map(subject => {
+    const total = getSubjectTotalQuestions(subject);
+    const answered = getSubjectAnsweredCount(subject);
+    const pct = total > 0 ? Math.round((answered/total)*100) : 0;
+    return `
+      <div class="stats-subject-card" onclick="openSubjectStats('${subject.id}')">
+        <div class="stats-subject-head">
+          <div class="stats-subject-title">${t.icons.subject} ${escapeHtml(subject.name)}</div>
+          <div class="stats-meta-pill">${total} سؤال</div>
+          <div class="stats-meta-pill">${pct}%</div>
+        </div>
+        <div class="progress-bar"><span style="width:${pct}%"></span></div>
+      </div>
+    `;
+  }).join('');
+}
+function openSubjectStats(subjectId){
+  const subject = state.subjects.find(s => s.id === subjectId);
+  if(!subject) return;
+  state.currentSubject = subject;
+  el('subject-stats-name').textContent = subject.name;
+  renderSubjectStats();
+  showScreen('subject-stats-screen');
+}
+function closeSubjectStats(){
+  goHome();
+}
+function renderSubjectStats(){
+  const subject = state.currentSubject;
+  if(!subject) return;
+  const total = getSubjectTotalQuestions(subject);
+  const answered = getSubjectAnsweredCount(subject);
+  const pct = total > 0 ? Math.round((answered/total)*100) : 0;
+  const t = theme();
+  const summaryDiv = el('subject-stats-summary');
+  summaryDiv.innerHTML = `
+    <div class="progress-card">
+      <h4>${subject.name}</h4>
+      <p><span>إجمالي الأسئلة</span><strong>${total}</strong></p>
+      <p><span>تمت الإجابة</span><strong>${answered}</strong></p>
+      <div class="progress-bar"><span style="width:${pct}%"></span></div>
+      <p><span>نسبة الإنجاز</span><strong>${pct}%</strong></p>
+    </div>
+  `;
+  // Render section buttons
+  const settings = state.subjectStatsSettings[subject.id] || { lectures: true, years: true, ai: true };
+  const sections = [];
+  if(subject.lectures.length && !isSectionExcluded('lecture') && settings.lectures !== false) sections.push({ type:'lecture', label:'المحاضرات', icon:t.icons.lectures });
+  if(subject.years.length && !isSectionExcluded('year') && settings.years !== false) sections.push({ type:'year', label:'السنوات', icon:t.icons.years });
+  if(subject.ai.length && !isSectionExcluded('ai') && settings.ai !== false) sections.push({ type:'ai', label:'الذكاء الاصطناعي', icon:t.icons.ai });
+  const buttonsDiv = el('subject-sections-buttons');
+  if(sections.length === 0){
+    buttonsDiv.innerHTML = '<div class="empty-state"><p>لا توجد أقسام متاحة لعرضها.</p></div>';
+    return;
+  }
+  buttonsDiv.innerHTML = sections.map(sec => `
+    <button class="category-card" onclick="openSubjectCategoryFromStats('${sec.type}')">
+      <span class="category-badge">${sec.icon} ${sec.label}</span>
+      <div class="category-meta"><div><span>الأسئلة</span><strong>${sec.type==='lecture'?subject.lectures.reduce((s,g)=>s+g.questions.length,0): sec.type==='year'?subject.years.reduce((s,g)=>s+g.questions.length,0): subject.ai.reduce((s,g)=>s+g.questions.length,0)}</strong></div></div>
+    </button>
+  `).join('');
+}
+function openSubjectCategoryFromStats(type){
+  if(!state.currentSubject) return;
+  let groups = [];
+  if(type === 'lecture') groups = state.currentSubject.lectures;
+  else if(type === 'year') groups = state.currentSubject.years;
+  else groups = state.currentSubject.ai;
+  showSelectionScreen(groups, `${state.currentSubject.name} - ${type}`, { backContext:'subject', searchable:true, sectionType:type, collectionType: null, displayLabel: state.currentSubject.name });
+}
+function openSubjectStatsSettings(){
+  const subject = state.currentSubject;
+  if(!subject) return;
+  const settings = state.subjectStatsSettings[subject.id] || { lectures: true, years: true, ai: true };
+  const container = el('subject-sections-toggle-list');
+  const sections = [];
+  if(subject.lectures.length) sections.push({ id:'lectures', label:'المحاضرات', checked: settings.lectures !== false });
+  if(subject.years.length) sections.push({ id:'years', label:'السنوات', checked: settings.years !== false });
+  if(subject.ai.length) sections.push({ id:'ai', label:'الذكاء الاصطناعي', checked: settings.ai !== false });
+  if(sections.length === 0){
+    container.innerHTML = '<div class="stats-empty-note">لا توجد أقسام متاحة للإعدادات.</div>';
+  } else {
+    container.innerHTML = sections.map(sec => `
+      <label style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <input type="checkbox" data-section="${sec.id}" ${sec.checked ? 'checked' : ''} onchange="saveSubjectStatsSettings()"> ${sec.label}
+      </label>
+    `).join('');
+  }
+  el('subject-stats-settings-modal').classList.remove('hidden');
+}
+function closeSubjectStatsSettings(){
+  el('subject-stats-settings-modal').classList.add('hidden');
+}
+function saveSubjectStatsSettings(){
+  const subject = state.currentSubject;
+  if(!subject) return;
+  const settings = { lectures: true, years: true, ai: true };
+  const checkboxes = document.querySelectorAll('#subject-sections-toggle-list input');
+  checkboxes.forEach(cb => {
+    const section = cb.dataset.section;
+    if(section === 'lectures') settings.lectures = cb.checked;
+    if(section === 'years') settings.years = cb.checked;
+    if(section === 'ai') settings.ai = cb.checked;
+  });
+  state.subjectStatsSettings[subject.id] = settings;
+  saveSubjectStatsSettings();
+  renderSubjectStats();
+  closeSubjectStatsSettings();
+}
+function openStatsExclusionDialog(){
+  const container = el('subject-exclusions-list');
+  const subjects = sortSubjects(state.subjects);
+  const excludedSet = getExcludedSubjectsSet();
+  container.innerHTML = subjects.map(sub => `
+    <label style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+      <input type="checkbox" data-subject-id="${sub.id}" ${excludedSet.has(sub.id) ? 'checked' : ''} onchange="saveStatsExclusions()"> ${escapeHtml(sub.name)}
+    </label>
+  `).join('');
+  // set section exclusions checkboxes
+  const exclLectures = el('exclude-lectures');
+  const exclYears = el('exclude-years');
+  const exclAi = el('exclude-ai');
+  if(exclLectures) exclLectures.checked = state.statsExclusions.excludedSections.lectures;
+  if(exclYears) exclYears.checked = state.statsExclusions.excludedSections.years;
+  if(exclAi) exclAi.checked = state.statsExclusions.excludedSections.ai;
+  el('stats-exclusion-modal').classList.remove('hidden');
+}
+function closeStatsExclusionDialog(){
+  el('stats-exclusion-modal').classList.add('hidden');
+}
+function saveStatsExclusions(){
+  const excludedSubjects = [];
+  document.querySelectorAll('#subject-exclusions-list input[data-subject-id]').forEach(cb => {
+    if(cb.checked) excludedSubjects.push(cb.dataset.subjectId);
+  });
+  state.statsExclusions.excludedSubjects = excludedSubjects;
+  state.statsExclusions.excludedSections = {
+    lectures: el('exclude-lectures') ? el('exclude-lectures').checked : false,
+    years: el('exclude-years') ? el('exclude-years').checked : false,
+    ai: el('exclude-ai') ? el('exclude-ai').checked : false
+  };
+  saveStatsExclusions();
+  renderStatisticsPage();
+}
+function openResetModal(){
+  const container = el('reset-subjects-list');
+  const subjects = sortSubjects(state.subjects);
+  container.innerHTML = subjects.map(sub => `
+    <label style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+      <input type="checkbox" data-subject-id="${sub.id}" class="reset-subject-checkbox"> ${escapeHtml(sub.name)}
+    </label>
+  `).join('');
+  state.resetSelectedSubjects = [];
+  document.getElementById('reset-step1').classList.remove('hidden');
+  document.getElementById('reset-step2').classList.add('hidden');
+  el('reset-stats-modal').classList.remove('hidden');
+}
+function closeResetModal(){
+  el('reset-stats-modal').classList.add('hidden');
+}
+function showResetConfirmation(){
+  const selected = Array.from(document.querySelectorAll('.reset-subject-checkbox:checked')).map(cb => cb.dataset.subjectId);
+  if(selected.length === 0){
+    showToast('يرجى اختيار مادة واحدة على الأقل.', 'error');
+    return;
+  }
+  state.resetSelectedSubjects = selected;
+  const allSubjects = sortSubjects(state.subjects);
+  const selectedNames = selected.map(id => allSubjects.find(s => s.id === id)?.name || id).join('، ');
+  const isAll = selected.length === allSubjects.length;
+  const msg = isAll ? 'أنت على وشك إعادة ضبط جميع بيانات التقدم (جميع المواد). هذا الإجراء لا يمكن التراجع عنه.' : `أنت على وشك إعادة ضبط بيانات التقدم للمواد التالية: ${selectedNames}. هذا الإجراء لا يمكن التراجع عنه.`;
+  el('reset-confirm-msg').innerHTML = `<p style="margin-bottom:16px;">${msg}</p>`;
+  document.getElementById('reset-step1').classList.add('hidden');
+  document.getElementById('reset-step2').classList.remove('hidden');
+}
+function goResetStep1(){
+  document.getElementById('reset-step1').classList.remove('hidden');
+  document.getElementById('reset-step2').classList.add('hidden');
+}
+function executeResetStatistics(){
+  const selected = state.resetSelectedSubjects;
+  const allSubjects = sortSubjects(state.subjects);
+  const toDelete = new Set(selected);
+  // Delete progress entries for selected subjects
+  // progress keys: subject:name, lecture:subject/name, year:subject/name, ai:subject/name
+  const newProgress = {};
+  for(const [key, value] of Object.entries(state.progress)){
+    let keep = true;
+    for(const subject of allSubjects){
+      if(toDelete.has(subject.id)){
+        if(key === `subject:${subject.name}`) keep = false;
+        if(key.startsWith(`lecture:${subject.name}/`)) keep = false;
+        if(key.startsWith(`year:${subject.name}/`)) keep = false;
+        if(key.startsWith(`ai:${subject.name}/`)) keep = false;
+      }
+    }
+    if(keep) newProgress[key] = value;
+  }
+  state.progress = newProgress;
+  saveProgressStore();
+  // Also remove wrong questions? Spec says "reset statistics data" - we only reset progress.
+  // Optionally reset favorites? Not specified. Keep as is.
+  renderStatisticsPage();
+  if(el('statistics-screen').classList.contains('active')) renderStatisticsPage();
+  if(el('subject-stats-screen').classList.contains('active') && state.currentSubject && toDelete.has(state.currentSubject.id)){
+    closeSubjectStats();
+  }
+  closeResetModal();
+  showToast('تم إعادة ضبط البيانات للمواد المحددة.', 'success');
+  updateStatisticsIfOpen();
+  renderMemories();
+}
+
+// Old toggleStatistics replaced
+function toggleStatistics(){
+  openStatisticsPage();
+}
+function updateStatisticsIfOpen(){
+  if(el('statistics-screen') && el('statistics-screen').classList.contains('active')){
+    renderStatisticsPage();
+  }
+  if(el('subject-stats-screen') && el('subject-stats-screen').classList.contains('active') && state.currentSubject){
+    renderSubjectStats();
+  }
+}
 
 function getCurrentBrowseSubjects(){
   if(state.browseMode==='all') return sortSubjects(state.subjects);
@@ -196,12 +507,8 @@ function toggleFavorite(questionId){ const idx=state.favorites.indexOf(questionI
 function getGroupProgressKey(type, subjectName, groupName){ return type+':'+subjectName+'/'+groupName; }
 function getAnsweredCountForKey(key){ const entry=state.progress[key]||{questionIds:[]}; return new Set(entry.questionIds||[]).size; }
 function getSectionSummary(subject, type){ const groups = type==='lecture' ? subject.lectures : type==='ai' ? subject.ai : subject.years; const totalQuestions = groups.reduce((sum,g)=>sum+g.questions.length,0); let answered = 0; groups.forEach(g=>answered += getAnsweredCountForKey(getGroupProgressKey(type, subject.name, g.name))); const pct = totalQuestions ? Math.round((answered/totalQuestions)*100) : 0; return { groups, totalQuestions, answered, pct }; }
-function toggleStatistics(){ const panel=el('statistics-panel'); panel.classList.toggle('visible'); if(panel.classList.contains('visible')) renderStatistics(); }
-function updateStatisticsIfOpen(){ const panel=el('statistics-panel'); if(panel && panel.classList.contains('visible')) renderStatistics(); }
-function toggleStatsSubject(subjectId){ const current = !!state.statsExpand.subjects[subjectId]; state.statsExpand.subjects[subjectId] = !current; if(current){ Object.keys(state.statsExpand.sections).forEach(key=>{ if(key.startsWith(subjectId+'__')) state.statsExpand.sections[key] = false; }); } renderStatistics(); }
-function toggleStatsSection(key){ state.statsExpand.sections[key] = !state.statsExpand.sections[key]; renderStatistics(); }
-function renderStatistics(){ const t=theme(); const ordered=sortSubjects(state.subjects); const answeredQuestions=new Set(); Object.keys(state.progress).forEach(key=>{ const entry=state.progress[key]||{questionIds:[]}; (entry.questionIds||[]).forEach(id=>answeredQuestions.add(id)); }); const totalQuestions=state.allQuestions.length; const summaryHtml=`<div class="stats-summary-grid"><div class="progress-card"><h4>${t.icons.progress} الإجمالي</h4><p><span>كل الأسئلة</span><strong>${totalQuestions}</strong></p><p><span>تمت الإجابة</span><strong>${answeredQuestions.size}</strong></p></div><div class="progress-card"><h4>${t.icons.favorites} المفضلة</h4><p><span>عدد الأسئلة</span><strong>${state.favorites.length}</strong></p></div><div class="progress-card"><h4>${t.icons.wrong} الأسئلة الخاطئة</h4><p><span>عدد الأسئلة</span><strong>${state.wrongQuestions.length}</strong></p></div></div>`; const subjectCards=ordered.map(subject=>{ const subjectKey='subject:'+subject.name; const answered=getAnsweredCountForKey(subjectKey); const pct=subject.totalQuestions ? Math.round((answered/subject.totalQuestions)*100) : 0; const isExpanded = !!state.statsExpand.subjects[subject.id]; const types=[{enabled:state.statsSettings.lectures,type:'lecture',label:'Lectures',icon:t.icons.lectures},{enabled:state.statsSettings.years,type:'year',label:'Years',icon:t.icons.years},{enabled:state.statsSettings.ai,type:'ai',label:'AI',icon:t.icons.ai}]; const sections = types.map(item=>{ if(!item.enabled) return ''; const summary=getSectionSummary(subject,item.type); if(!summary.groups.length) return ''; const secKey=subject.id+'__'+item.type; const open = !!state.statsExpand.sections[secKey]; const groupRows=summary.groups.map(group=>{ const answeredGroup=getAnsweredCountForKey(getGroupProgressKey(item.type, subject.name, group.name)); const pctGroup=group.questions.length?Math.round((answeredGroup/group.questions.length)*100):0; return `<div class="stats-lecture-row"><div><strong>${escapeHtml(group.name)}</strong></div><div class="stats-meta-pill">${group.questions.length} سؤال</div><div class="stats-meta-pill">${pctGroup}%</div></div>`; }).join(''); return `<div class="stats-section-card ${open?'expanded':''}"><div class="stats-section-head"><div class="stats-section-title">${item.icon} ${item.label}</div><div class="stats-meta-pill">${summary.totalQuestions} سؤال</div><div class="stats-meta-pill">${summary.pct}%</div><button class="stats-expand-btn" onclick="event.stopPropagation(); toggleStatsSection('${secKey}')">${open?'△':'▽'}</button></div><div class="stats-section-details"><div class="stats-lecture-list">${groupRows}</div></div></div>`; }).filter(Boolean).join(''); const details = sections || `<div class="stats-empty-note">لا توجد أقسام ظاهرة حسب الإعدادات أو لا توجد ملفات متاحة.</div>`; return `<div class="stats-subject-card ${isExpanded?'expanded':''}"><div class="stats-subject-head"><div class="stats-subject-title">${t.icons.subject} ${escapeHtml(subject.name)}</div><div class="stats-meta-pill">${subject.totalQuestions} سؤال</div><div class="stats-meta-pill">${pct}%</div><button class="stats-expand-btn" onclick="toggleStatsSubject('${subject.id}')">${isExpanded?'△':'▽'}</button></div><div class="stats-subject-details">${details}</div></div>`; }).join(''); el('stats-content').innerHTML = summaryHtml + '<div class="progress-grid">' + (subjectCards || '<div class="empty-state"><p>لا توجد بيانات إحصائية بعد.</p></div>') + '</div>'; }
-function resetProgress(){ askConfirm('هل تريد إعادة ضبط جميع البيانات؟ لا يمكن التراجع عن هذا الإجراء.', ()=>{ state.progress={}; saveProgressStore(); localStorage.removeItem(STORAGE_KEYS.progress); showToast('تمت إعادة ضبط بيانات التقدم.','success'); updateStatisticsIfOpen(); renderMemories(); }); }
+// Old toggleStatistics replaced, keep updateStatisticsIfOpen
+function resetProgressFull(){ askConfirm('هل تريد إعادة ضبط جميع البيانات (جميع المواد)؟ لا يمكن التراجع عن هذا الإجراء.', ()=>{ state.progress={}; saveProgressStore(); showToast('تمت إعادة ضبط جميع بيانات التقدم.','success'); updateStatisticsIfOpen(); renderMemories(); }); }
 
 function aggregateMemorySeries(period, detailed, selectedSubjects){ const entries = Object.entries(state.questionsFirstSeen || {}).map(([qid,info])=>({qid, ts:Number(info.ts||0), subjectName:info.subjectName||'غير معروف'})).filter(x=>x.ts>0).sort((a,b)=>a.ts-b.ts); const now=new Date(); let labels=[]; let buckets=[]; if(period==='weekly'){ for(let i=6;i>=0;i--){ const d=new Date(now); d.setHours(0,0,0,0); d.setDate(now.getDate()-i); const key=d.toISOString().slice(0,10); buckets.push(key); labels.push(d.toLocaleDateString('ar-EG',{weekday:'short', day:'numeric'})); } } else if(period==='monthly'){ for(let i=29;i>=0;i--){ const d=new Date(now); d.setHours(0,0,0,0); d.setDate(now.getDate()-i); const key=d.toISOString().slice(0,10); buckets.push(key); labels.push(d.toLocaleDateString('ar-EG',{month:'numeric', day:'numeric'})); } } else { for(let i=11;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); buckets.push(key); labels.push(d.toLocaleDateString('ar-EG',{month:'short', year:'2-digit'})); } }
   function getBucketKey(ts){ const d=new Date(ts); if(period==='yearly') return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
@@ -228,14 +535,14 @@ function renderMemories(){ if(!el('memories-screen')) return; const subjects = s
   const period = el('memory-period') ? el('memory-period').value : 'weekly'; const mode = el('memory-view-mode') ? el('memory-view-mode').value : 'all'; const selectedSubjects = Array.from(document.querySelectorAll('#memory-subject-filters input:checked')).map(x=>x.value);
   const data = aggregateMemorySeries(period, mode==='detailed', selectedSubjects);
   const canvas = el('memories-chart'); if(canvas) drawMemoriesChart(canvas, data.labels, data.series);
-  const totalUnique = Object.keys(state.questionsFirstSeen||{}).length; const totalTime = state.examHistory.reduce((sum,e)=>sum+(e.durationMs||0),0); const summary = el('memories-time-summary'); if(summary){ summary.innerHTML = `<div class="progress-card"><h4>أول دخول</h4><p><strong>${formatDateTime(state.firstVisit)}</strong></p></div><div class="progress-card"><h4>عدد الأسئلة الكلي</h4><p><strong>${totalUnique}</strong></p></div><div class="progress-card"><h4>الوقت الكلي بالامتحانات</h4><p><strong>${formatDuration(totalTime)}</strong></p></div>`; }
+  const totalUnique = Object.keys(state.questionsFirstSeen||{}).length; const totalTime = state.examHistory.reduce((sum,e)=>sum+(e.durationMs||0),0); const summary = el('memories-time-summary'); if(summary){ summary.innerHTML = `<div class="progress-card"><h4>أول دخول</h4><p><strong>${formatDateTime(state.firstVisit)}</strong></p></div><div class="progress-card"><h4>عدد الأسئلة الكلي (المُجاب عنها)</h4><p><strong>${totalUnique}</strong></p></div><div class="progress-card"><h4>الوقت الكلي بالامتحانات</h4><p><strong>${formatDuration(totalTime)}</strong></p></div>`; }
   const historyList = el('memories-history-list'); if(historyList){ const history = getFilteredExamHistory(); historyList.innerHTML = history.length ? history.map(exam=>`<div class="memory-history-item" style="--subject-color:${getSubjectColor(exam.subjectName || 'Unknown Subject')}"><div class="history-subject">${escapeHtml(exam.subjectName || 'Unknown Subject')}</div><strong>${escapeHtml(formatHistorySubLabel(exam))}</strong><br><small style="color:var(--text-light)">${formatDateTime(exam.endedAt)}<br>${exam.mode==='exam'?'امتحان فعلي':'تدريب'} · ${exam.correct}/${exam.total} · ${exam.score}% · ${formatDuration(exam.durationMs||0)}</small></div>`).join('') : '<div class="stats-empty-note">لا توجد امتحانات مطابقة.</div>'; }
 }
-function printMemoriesPdf(){ const selected=getCurrentHistoryFilterValue(); const history = state.examHistory.slice().sort((a,b)=>(b.endedAt||0)-(a.endedAt||0)).filter(exam=>selected==='all' || exam.subjectName===selected); const historyHtml = history.length ? history.map(exam=>{ const color=getSubjectColor(exam.subjectName || 'Unknown Subject'); const badgeTextColor=isDarkTheme() ? '#0f172a' : '#ffffff'; return `<div class="card" style="border-inline-start:6px solid ${color};"><div style="display:inline-block;padding:6px 10px;border-radius:999px;background:${color};color:${badgeTextColor};font-weight:900;margin-bottom:8px;">${escapeHtml(exam.subjectName || 'Unknown Subject')}</div><br><strong>${escapeHtml(formatHistorySubLabel(exam))}</strong><br><small>${formatDateTime(exam.endedAt)}<br>${exam.mode==='exam'?'امتحان فعلي':'تدريب'} · ${exam.correct}/${exam.total} · ${exam.score}% · ${formatDuration(exam.durationMs||0)}</small></div>`; }).join('') : '<div class="card">لا توجد امتحانات مسجلة بعد.</div>'; const html = `<html dir="rtl"><head><meta charset="utf-8"><title>ذكريات الوقت</title><style>body{font-family:Arial,sans-serif;padding:24px;direction:rtl}h1,h2{margin:0 0 12px}.card{border:1px solid #ccc;border-radius:12px;padding:12px;margin-bottom:12px}small{color:#555}</style></head><body><h1>ذكريات الوقت</h1><div class="card"><strong>أول دخول:</strong> ${formatDateTime(state.firstVisit)}</div><div class="card"><strong>عدد الأسئلة الكلي:</strong> ${Object.keys(state.questionsFirstSeen||{}).length}</div><div class="card"><strong>الوقت الكلي بالامتحانات:</strong> ${formatDuration(state.examHistory.reduce((sum,e)=>sum+(e.durationMs||0),0))}</div><h2>سجل الامتحانات</h2>${historyHtml}</body></html>`; const win = window.open('', '_blank'); win.document.open(); win.document.write(html); win.document.close(); win.focus(); setTimeout(()=>win.print(), 400); }
+function printMemoriesPdf(){ const selected=getCurrentHistoryFilterValue(); const history = state.examHistory.slice().sort((a,b)=>(b.endedAt||0)-(a.endedAt||0)).filter(exam=>selected==='all' || exam.subjectName===selected); const historyHtml = history.length ? history.map(exam=>{ const color=getSubjectColor(exam.subjectName || 'Unknown Subject'); const badgeTextColor=isDarkTheme() ? '#0f172a' : '#ffffff'; return `<div class="card" style="border-inline-start:6px solid ${color};"><div style="display:inline-block;padding:6px 10px;border-radius:999px;background:${color};color:${badgeTextColor};font-weight:900;margin-bottom:8px;">${escapeHtml(exam.subjectName || 'Unknown Subject')}</div><br><strong>${escapeHtml(formatHistorySubLabel(exam))}</strong><br><small>${formatDateTime(exam.endedAt)}<br>${exam.mode==='exam'?'امتحان فعلي':'تدريب'} · ${exam.correct}/${exam.total} · ${exam.score}% · ${formatDuration(exam.durationMs||0)}</small></div>`; }).join('') : '<div class="card">لا توجد امتحانات مسجلة بعد.</div>'; const html = `<html dir="rtl"><head><meta charset="utf-8"><title>ذكريات الوقت</title><style>body{font-family:Arial,sans-serif;padding:24px;direction:rtl}h1,h2{margin:0 0 12px}.card{border:1px solid #ccc;border-radius:12px;padding:12px;margin-bottom:12px}small{color:#555}</style></head><body><h1>ذكريات الوقت</h1><div class="card"><strong>أول دخول:</strong> ${formatDateTime(state.firstVisit)}</div><div class="card"><strong>عدد الأسئلة المُجاب عنها:</strong> ${Object.keys(state.questionsFirstSeen||{}).length}</div><div class="card"><strong>الوقت الكلي بالامتحانات:</strong> ${formatDuration(state.examHistory.reduce((sum,e)=>sum+(e.durationMs||0),0))}</div><h2>سجل الامتحانات</h2>${historyHtml}</body></html>`; const win = window.open('', '_blank'); win.document.open(); win.document.write(html); win.document.close(); win.focus(); setTimeout(()=>win.print(), 400); }
 
 function showFireworks(durationFrames=80, explosionCount=18){ const canvas=el('fireworks-canvas'); if(!canvas) return; canvas.classList.remove('hidden'); const ctx=canvas.getContext('2d'); canvas.width=window.innerWidth; canvas.height=window.innerHeight; const palettes={default:['#2563eb','#38bdf8','#10b981','#f59e0b'],desert:['#f4c95d','#db9b41','#9a5b24','#fff0c9'],space:['#8b5cf6','#38bdf8','#f0abfc','#ffffff'],pirates:['#d9a740','#7d4b16','#fdf0c2','#7ec8e3'],castle:['#d4af37','#7c3f98','#f5f1dc','#9ea7d8'],lab:['#00bcd4','#7ef9ff','#15d3a2','#ffffff']}; const colors=palettes[state.settings.theme]||palettes.default; const particles=[]; const bursts=[{x:canvas.width*.3,y:canvas.height*.35},{x:canvas.width*.7,y:canvas.height*.4},{x:canvas.width*.5,y:canvas.height*.26}]; bursts.forEach(b=>{ for(let i=0;i<explosionCount;i++){ const angle=(Math.PI*2*i)/explosionCount; const speed=2.5+Math.random()*4.8; particles.push({x:b.x,y:b.y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,color:colors[Math.floor(Math.random()*colors.length)],size:Math.random()*3+1.5,life:1}); } }); let frame=0; function animate(){ ctx.clearRect(0,0,canvas.width,canvas.height); particles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.08; p.life-=0.012; if(p.life>0){ ctx.globalAlpha=p.life; ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); } }); frame++; if(frame<durationFrames) requestAnimationFrame(animate); else { ctx.clearRect(0,0,canvas.width,canvas.height); canvas.classList.add('hidden'); } } animate(); }
 
-function goHome(){ const wasResults = el('results-screen').classList.contains('active'); toggleExamSettings(false); toggleStatisticsSettings(false); showScreen('home-screen'); const review=el('results-review'); if(review) review.classList.add('hidden'); if(wasResults){ setTimeout(()=>softReloadApp(), 150); } }
+function goHome(){ const wasResults = el('results-screen').classList.contains('active'); toggleExamSettings(false); closeStatsExclusionDialog(); closeResetModal(); closeSubjectStatsSettings(); showScreen('home-screen'); const review=el('results-review'); if(review) review.classList.add('hidden'); if(wasResults){ setTimeout(()=>softReloadApp(), 150); } }
 function softReloadApp(){ const currentAudioTime = el('bg-audio') ? el('bg-audio').currentTime : 0; renderSubjects(); updateStatisticsIfOpen(); renderMemories(); if(el('bg-audio') && state.settings.bgSoundEnabled!==false && state.settings.bgSound!=='none'){ try{ el('bg-audio').currentTime = currentAudioTime; el('bg-audio').play().catch(()=>{}); }catch(e){} } }
 function checkResumeExam(){ const raw=localStorage.getItem(STORAGE_KEYS.examState); if(!raw) return; try{ const saved=JSON.parse(raw); if(!saved || saved.submitted || !Array.isArray(saved.questions) || !saved.questions.length){ clearExamState(); return; } askConfirm('يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟', ()=>{ state.currentExam=saved; showScreen('exam-screen'); renderExam(); if(state.currentExam.mode==='exam') startTimer(); }, ()=>clearExamState()); }catch{ clearExamState(); } }
 
@@ -256,7 +563,7 @@ async function scanSubjectFolder(dirItem){ const items=await listRepoDirectory(d
 async function loadData(){ setEmptyText('التحميل جارٍ ...','⏳'); state.subjects=[]; state.allQuestions=[]; state.discoveredRepo=await discoverRepository(); if(!state.discoveredRepo){ renderSubjects(); return; } const root=await listRepoDirectory(''); const subjectDirs=root.filter(item=>item.type==='dir' && !IGNORE_ROOT_DIRS.has(item.name.toLowerCase())); const scanned=[]; for(const dir of subjectDirs){ const s=await scanSubjectFolder(dir); if(s) scanned.push(s); } state.subjects=sortSubjects(scanned); normalizeSubjectPreferences(); state.allQuestions=state.subjects.flatMap(s=>s.allQuestions); populateSearchFilter(); renderSubjects(); updateStatisticsIfOpen(); renderMemories(); }
 
 window.addEventListener('DOMContentLoaded', async ()=>{
-  loadSettings(); loadProgress(); loadFavorites(); loadWrongQuestions(); loadSubjectPreferences(); loadStatsSettings(); loadMemoryStores();
+  loadSettings(); loadProgress(); loadFavorites(); loadWrongQuestions(); loadSubjectPreferences(); loadStatsExclusions(); loadSubjectStatsSettings(); loadMemoryStores();
   applySettings();
   const quotes = [
 'لا توجد وصفة سحرية، ولا توجد طريقة ليس فيها العمل والتعب وبذل الجهد!',
@@ -323,4 +630,5 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   checkResumeExam();
 });
 
-window.state=state; window.openExams=openExams; window.openSection=openSection; window.toggleStatistics=toggleStatistics; window.toggleSettings=toggleSettings; window.toggleDarkMode=toggleDarkMode; window.changeTheme=changeTheme; window.changeSound=changeSound; window.toggleBackgroundSoundEnabled=toggleBackgroundSoundEnabled; window.changeVolume=changeVolume; window.toggleFeedbackSounds=toggleFeedbackSounds; window.toggleAnimations=toggleAnimations; window.filterSubjects=filterSubjects; window.handleSubjectOpen=handleSubjectOpen; window.startSubjectLongPress=startSubjectLongPress; window.cancelSubjectLongPress=cancelSubjectLongPress; window.moveSubject=moveSubject; window.togglePinSubject=togglePinSubject; window.openSubject=openSubject; window.openSubjectCategory=openSubjectCategory; window.backFromSelection=backFromSelection; window.filterSelectionList=filterSelectionList; window.toggleGroupSelection=toggleGroupSelection; window.selectMode=selectMode; window.selectDirection=selectDirection; window.addExtraTime=addExtraTime; window.confirmStartExam=confirmStartExam; window.startSpecialExam=startSpecialExam; window.selectOption=selectOption; window.showAnswer=showAnswer; window.nextQuestion=nextQuestion; window.prevQuestion=prevQuestion; window.navigateToQuestion=navigateToQuestion; window.toggleGrid=toggleGrid; window.exitExam=exitExam; window.finishExam=finishExam; window.reviewExam=reviewExam; window.performSearch=performSearch; window.openReadonly=openReadonly; window.closeReadonly=closeReadonly; window.showLocation=showLocation; window.toggleQuestionLocation=toggleQuestionLocation; window.toggleFavorite=toggleFavorite; window.resetProgress=resetProgress; window.goHome=goHome; window.toggleExamSettings=toggleExamSettings; window.toggleStatisticsSettings=toggleStatisticsSettings; window.updateStatisticsType=updateStatisticsType; window.toggleStatsSubject=toggleStatsSubject; window.toggleStatsSection=toggleStatsSection; window.hideDialog=hideDialog; window.dialogConfirmAction=dialogConfirmAction; window.dialogCancelAction=dialogCancelAction; window.backToSubjects=backToSubjects; window.confirmRemoveCurrentWrong=confirmRemoveCurrentWrong; window.confirmBulkRemoveMasteredWrong=confirmBulkRemoveMasteredWrong; window.openMemories=openMemories; window.switchMemoriesTab=switchMemoriesTab; window.renderMemories=renderMemories; window.printMemoriesPdf=printMemoriesPdf; window.openHistoryDeleteDialog=openHistoryDeleteDialog; window.toggleHistoryDeleteModal=toggleHistoryDeleteModal; window.renderHistoryDeleteList=renderHistoryDeleteList; window.selectAllHistoryDeleteItems=selectAllHistoryDeleteItems; window.confirmDeleteHistoryItems=confirmDeleteHistoryItems;
+window.state=state; window.openExams=openExams; window.openSection=openSection; window.toggleStatistics=toggleStatistics; window.toggleSettings=toggleSettings; window.toggleDarkMode=toggleDarkMode; window.changeTheme=changeTheme; window.changeSound=changeSound; window.toggleBackgroundSoundEnabled=toggleBackgroundSoundEnabled; window.changeVolume=changeVolume; window.toggleFeedbackSounds=toggleFeedbackSounds; window.toggleAnimations=toggleAnimations; window.filterSubjects=filterSubjects; window.handleSubjectOpen=handleSubjectOpen; window.startSubjectLongPress=startSubjectLongPress; window.cancelSubjectLongPress=cancelSubjectLongPress; window.moveSubject=moveSubject; window.togglePinSubject=togglePinSubject; window.openSubject=openSubject; window.openSubjectCategory=openSubjectCategory; window.backFromSelection=backFromSelection; window.filterSelectionList=filterSelectionList; window.toggleGroupSelection=toggleGroupSelection; window.selectMode=selectMode; window.selectDirection=selectDirection; window.addExtraTime=addExtraTime; window.confirmStartExam=confirmStartExam; window.startSpecialExam=startSpecialExam; window.selectOption=selectOption; window.showAnswer=showAnswer; window.nextQuestion=nextQuestion; window.prevQuestion=prevQuestion; window.navigateToQuestion=navigateToQuestion; window.toggleGrid=toggleGrid; window.exitExam=exitExam; window.finishExam=finishExam; window.reviewExam=reviewExam; window.performSearch=performSearch; window.openReadonly=openReadonly; window.closeReadonly=closeReadonly; window.showLocation=showLocation; window.toggleQuestionLocation=toggleQuestionLocation; window.toggleFavorite=toggleFavorite; window.resetProgress=resetProgressFull; window.goHome=goHome; window.toggleExamSettings=toggleExamSettings; window.hideDialog=hideDialog; window.dialogConfirmAction=dialogConfirmAction; window.dialogCancelAction=dialogCancelAction; window.backToSubjects=backToSubjects; window.confirmRemoveCurrentWrong=confirmRemoveCurrentWrong; window.confirmBulkRemoveMasteredWrong=confirmBulkRemoveMasteredWrong; window.openMemories=openMemories; window.switchMemoriesTab=switchMemoriesTab; window.renderMemories=renderMemories; window.printMemoriesPdf=printMemoriesPdf; window.openHistoryDeleteDialog=openHistoryDeleteDialog; window.toggleHistoryDeleteModal=toggleHistoryDeleteModal; window.renderHistoryDeleteList=renderHistoryDeleteList; window.selectAllHistoryDeleteItems=selectAllHistoryDeleteItems; window.confirmDeleteHistoryItems=confirmDeleteHistoryItems;
+window.openStatisticsPage=openStatisticsPage; window.closeStatisticsPage=closeStatisticsPage; window.renderStatisticsPage=renderStatisticsPage; window.openSubjectStats=openSubjectStats; window.closeSubjectStats=closeSubjectStats; window.openSubjectCategoryFromStats=openSubjectCategoryFromStats; window.openStatsExclusionDialog=openStatsExclusionDialog; window.closeStatsExclusionDialog=closeStatsExclusionDialog; window.saveStatsExclusions=saveStatsExclusions; window.openResetModal=openResetModal; window.closeResetModal=closeResetModal; window.showResetConfirmation=showResetConfirmation; window.goResetStep1=goResetStep1; window.executeResetStatistics=executeResetStatistics; window.openSubjectStatsSettings=openSubjectStatsSettings; window.closeSubjectStatsSettings=closeSubjectStatsSettings; window.saveSubjectStatsSettings=saveSubjectStatsSettings;
