@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Medical Exam Practice</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <div id="home-screen" class="screen active">
+      <div class="home-hero">
+        <h1 class="bismillah">بسم الله الرحمن الرحيم</h1>
+        <div class="logo-container">
+          <img src="logo.jpg" alt="Logo" class="app-logo" onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';">
+          <div id="logo-fallback" style="display:none; font-size:3rem; margin-bottom:10px;">🩺</div>
+          <div id="random-quote" class="app-subtitle"></div>
+        </div>
+      </div>
+
+      <div class="nav-grid">
+        <button class="nav-btn nav-btn-featured" onclick="openExams()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-exams">📝</span></div><span class="nav-label">Exams</span></button>
+        <button class="nav-btn" onclick="openSection('wrong')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-wrong">❌</span></div><span class="nav-label">Wrong Questions</span></button>
+        <button class="nav-btn" onclick="openSection('favorites')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-favorites">⭐</span></div><span class="nav-label">Favorite Questions</span></button>
+        <button class="nav-btn" onclick="openSection('checklist')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-checklist">☑️</span></div><span class="nav-label">Checklist</span></button>
+        <button class="nav-btn" onclick="openSection('search')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-search">🔍</span></div><span class="nav-label">Search</span></button>
+        <button class="nav-btn" onclick="openStatisticsPage()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-statistics">📊</span></div><span class="nav-label">Statistics</span></button>
+        <button class="nav-btn" onclick="toggleSettings()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-settings">⚙️</span></div><span class="nav-label">Settings</span></button>
+        <button class="nav-btn nav-btn-memories" onclick="openMemories()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-memories">📖</span></div><span class="nav-label">Memories</span></button>
+      </div>
+
+      <div id="settings-panel" class="hidden-panel">
+        <div class="panel-header"><h3 id="settings-title">⚙️ الإعدادات</h3><button class="btn-close" onclick="toggleSettings()">✕</button></div>
+        <div id="dark-mode-setting" class="setting-item"><label>الوضع الداكن</label><label class="switch"><input type="checkbox" id="dark-mode-toggle" onchange="toggleDarkMode()"><span class="slider"></span></label></div>
+        <div class="setting-item"><label>السمة</label><select id="theme-selector" onchange="changeTheme(this.value)"><option value="default">الافتراضي</option><option value="desert">البادية</option><option value="space">الفضاء</option><option value="pirates">القراصنة</option><option value="castle">القلعة</option><option value="lab">المختبر</option></select></div>
+        <div class="setting-item"><label>الصوت الخلفي</label><select id="sound-selector" onchange="changeSound(this.value)"><option value="none">بدون صوت</option><option value="cafeteria">الكافيتيريا</option><option value="after-exam">بعد الامتحان</option><option value="beach">الشاطئ</option><option value="forest">الغابة</option><option value="fireplace">مدفأة حطب</option><option value="rain-thunder">أمطار رعدية</option><option value="rain-window">مطر على النافذة</option></select></div>
+        <div class="setting-item"><label>تفعيل الصوت الخلفي</label><label class="switch"><input type="checkbox" id="bg-sound-enabled-toggle" onchange="toggleBackgroundSoundEnabled()"><span class="slider"></span></label></div>
+        <div class="setting-item"><label>مستوى الصوت</label><input type="range" id="volume-control" min="0" max="100" value="50" oninput="changeVolume(this.value)"></div>
+        <div class="setting-item"><label>أصوات الإجابة الصحيحة والخاطئة</label><label class="switch"><input type="checkbox" id="feedback-toggle" onchange="toggleFeedbackSounds()"><span class="slider"></span></label></div>
+        <div class="setting-item"><label>الحركات</label><label class="switch"><input type="checkbox" id="animations-toggle" onchange="toggleAnimations()"><span class="slider"></span></label></div>
+      </div>
+    </div>
+
+    <div id="statistics-screen" class="screen">
+      <div class="screen-header statistics-screen-header">
+        <button class="btn-back" onclick="closeStatisticsPage()">← رجوع</button>
+        <h3 id="statistics-screen-title">📊 الإحصائيات</h3>
+        <div class="panel-header-actions">
+          <button class="btn-secondary btn-mini" onclick="openStatsExclusionDialog()">⚙️</button>
+          <button class="btn-danger btn-mini" onclick="openResetModal()">🗑️ إعادة ضبط</button>
+        </div>
+      </div>
+      <div id="global-stats-container" class="stats-summary-grid"></div>
+      <div id="subjects-stats-list" class="subject-stats-list"></div>
+    </div>
+
+    <div id="stats-exclusion-modal" class="modal-overlay hidden" onclick="if(event.target.id==='stats-exclusion-modal') closeStatsExclusionDialog()">
+      <div class="modal-card statistics-modal" style="max-width: 90%; width: 560px;">
+        <div class="panel-header modal-header"><h3>⚙️ إعدادات الإحصائيات</h3><button class="btn-close" onclick="closeStatsExclusionDialog()">✕</button></div>
+        <div class="exclusion-section"><strong>المواد المستبعدة</strong><div id="subject-exclusions-list" class="exclusion-checkboxes"></div></div>
+        <div class="exclusion-section"><strong>الأقسام المستبعدة</strong><div id="section-exclusions-list" class="exclusion-checkboxes"><label><input type="checkbox" id="exclude-lectures"> المحاضرات (Lectures)</label><label><input type="checkbox" id="exclude-years"> السنوات (Years)</label><label><input type="checkbox" id="exclude-ai"> الذكاء الاصطناعي (AI)</label></div></div>
+        <div class="dialog-actions"><button class="btn-secondary" onclick="closeStatsExclusionDialog()">إغلاق</button><button class="btn-primary" onclick="applyStatsExclusions()">✅ Apply</button></div>
+      </div>
+    </div>
+
+    <div id="reset-stats-modal" class="modal-overlay hidden" onclick="if(event.target.id==='reset-stats-modal') closeResetModal()">
+      <div class="modal-card statistics-modal" style="max-width: 90%; width: 560px;">
+        <div class="panel-header modal-header"><h3>إعادة ضبط البيانات (جزئي أو كلي)</h3><button class="btn-close" onclick="closeResetModal()">✕</button></div>
+        <div class="reset-step" id="reset-step1"><strong>اختر المواد المراد إعادة ضبط تقدمها:</strong><div id="reset-subjects-list" class="exclusion-checkboxes"></div><div class="dialog-actions"><button class="btn-primary" onclick="showResetConfirmation()">التالي</button></div></div>
+        <div class="reset-step hidden" id="reset-step2"><div id="reset-confirm-msg"></div><div class="dialog-actions"><button class="btn-secondary" onclick="goResetStep1()">رجوع</button><button class="btn-danger" onclick="executeResetStatistics()">تأكيد الحذف</button></div></div>
+      </div>
+    </div>
+
+    <div id="subject-stats-settings-modal" class="modal-overlay hidden" onclick="if(event.target.id==='subject-stats-settings-modal') closeSubjectStatsSettings()">
+      <div class="modal-card statistics-modal">
+        <div class="panel-header modal-header"><h3>إعدادات عرض المادة</h3><button class="btn-close" onclick="closeSubjectStatsSettings()">✕</button></div>
+        <div id="subject-stats-modal-subject-name" class="stats-modal-subject-name"></div>
+        <div id="subject-sections-toggle-list" class="exclusion-checkboxes"></div>
+        <div class="dialog-actions"><button class="btn-secondary" onclick="closeSubjectStatsSettings()">إغلاق</button><button class="btn-primary" onclick="applySubjectStatsSettings()">✅ Apply</button></div>
+      </div>
+    </div>
+
+    <div id="subjects-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3 id="subjects-screen-title">Subjects</h3></div>
+      <div class="search-container compact-search"><input type="text" id="subjects-search" placeholder="ابحث عن المادة..." oninput="filterSubjects()"></div>
+      <div id="exams-hint-bar" class="hint-bar hidden">اضغط مطولًا على المادة لتثبيتها أو نقلها للأعلى أو للأسفل 💫</div>
+      <div id="subjects-empty" class="empty-state"><div class="empty-icon">⏳</div><p id="subjects-empty-text">التحميل جارٍ ...</p></div>
+      <div id="subjects-list" class="subject-grid"></div>
+    </div>
+
+    <div id="checklist-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3>☑️ Checklist</h3></div>
+      <div id="checklist-list" class="selection-list checklist-list"></div>
+    </div>
+
+    <div id="subject-sections-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="backToSubjects()">← رجوع</button><h3 id="subject-sections-title">Subject</h3></div>
+      <div id="subject-sections-summary" class="subject-summary"></div>
+      <div id="subject-categories" class="category-grid"></div>
+    </div>
+
+    <div id="selection-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="backFromSelection()">← رجوع</button><h3 id="selection-title">Select</h3></div>
+      <div id="selection-search-container" class="search-container compact-search hidden"><input type="text" id="selection-search" placeholder="ابحث..." oninput="filterSelectionList()"></div>
+      <div id="selection-list" class="selection-list"></div>
+      <div id="selection-footer" class="selection-footer hidden">
+        <div class="footer-info"><p id="selected-count">0 questions selected</p></div>
+        <div class="question-count-control"><label>عدد الأسئلة:</label><div class="count-input-wrap"><input type="number" id="question-count-input" min="1" value="1"><span id="max-questions-label">/ 0</span></div></div>
+        <div class="mode-selection"><h4>اختر النمط</h4><div class="mode-buttons"><button class="btn-mode" id="btn-training-mode" onclick="selectMode('training')"><span class="mode-icon">🎓</span><span class="mode-label">Training Mode</span></button><button class="btn-mode" id="btn-exam-mode" onclick="selectMode('exam')"><span class="mode-icon">📝</span><span class="mode-label">Real Exam Mode</span></button></div></div>
+        <div id="direction-selection" class="direction-selection hidden"><h4>اتجاه التنقل</h4><div class="direction-buttons"><button class="btn-direction" id="btn-oneway" onclick="selectDirection('oneway')"><span class="direction-icon">→</span><span class="direction-label">One Way</span><small>لا يمكن الرجوع</small></button><button class="btn-direction" id="btn-twoway" onclick="selectDirection('twoway')"><span class="direction-icon">↔</span><span class="direction-label">Two Way</span><small>يمكن مراجعة السابق</small></button></div></div>
+        <div id="timer-options" class="timer-options hidden"><h4>إعدادات الوقت</h4><div class="timer-info"><p>الوقت الأساسي: <strong id="base-time-display">0 min</strong></p><p>الوقت الإضافي: <strong id="extra-time-display">+0 min</strong></p><p>الإجمالي: <strong id="total-time-display">0 min</strong></p></div><button class="btn-extra-time" id="btn-add-extra" onclick="addExtraTime()">+ إضافة 5 دقائق</button></div>
+        <div id="start-section" class="start-section hidden"><button class="btn-start" id="btn-start-exam" onclick="confirmStartExam()">🚀 Start Exam</button></div>
+      </div>
+    </div>
+
+    <div id="search-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3>Search Questions</h3></div>
+      <div class="search-container"><input type="text" id="search-input" placeholder="ابحث في السؤال أو الخيارات أو الشرح..." oninput="performSearch()"><select id="search-filter" onchange="performSearch()"><option value="all">All Subjects</option></select></div>
+      <div id="search-results" class="search-results"></div>
+    </div>
+
+    <div id="exam-screen" class="screen">
+      <div class="exam-header"><button class="btn-back" onclick="exitExam()">← Exit</button><div class="exam-header-right"><div id="exam-timer" class="exam-timer hidden"></div><div id="exam-progress" class="exam-progress-badge"></div></div></div>
+      <div id="question-grid" class="question-grid"></div>
+      <div class="exam-tools-row"><button class="btn-grid-toggle" id="btn-grid-toggle" onclick="toggleGrid()"><span>☰</span> إخفاء الشبكة</button><button class="btn-secondary btn-exam-settings" id="btn-exam-settings" onclick="toggleExamSettings(true)">⚙️ Exam Settings</button></div>
+      <div id="question-container" class="question-container"></div>
+      <div id="exam-nav" class="exam-nav"></div>
+    </div>
+
+    <div id="results-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="goHome()">← Home</button><h3 id="results-title">Results</h3></div>
+      <div id="results-waiting" class="hidden"><div class="loading-spinner"></div><p id="waiting-message" class="waiting-msg">انتظر ...</p></div>
+      <div id="results-content"></div>
+      <div id="results-review" class="hidden"></div>
+    </div>
+
+    <div id="readonly-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="closeReadonly()">← رجوع</button><h3>Question Viewer</h3></div>
+      <div id="readonly-content"></div>
+    </div>
+
+    <div id="memories-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3>📖 الذكريات</h3></div>
+      <div class="mode-buttons memories-tabs">
+        <button class="btn-mode active" id="mem-tab-chart" onclick="switchMemoriesTab('chart')"><span class="mode-label">مخطط الذكريات</span></button>
+        <button class="btn-mode" id="mem-tab-time" onclick="switchMemoriesTab('time')"><span class="mode-label">ذكريات الوقت</span></button>
+      </div>
+      <div id="memories-chart-tab">
+        <div class="hidden-panel visible">
+          <div class="setting-item"><label>الفترة</label><select id="memory-period" onchange="renderMemories()"><option value="weekly">أسبوعي</option><option value="monthly">شهري</option><option value="yearly">سنوي</option></select></div>
+          <div class="setting-item"><label>النمط</label><select id="memory-view-mode" onchange="renderMemories()"><option value="all">كل المواد بخط واحد</option><option value="detailed">تفصيلي لكل مادة</option></select></div>
+          <div class="setting-item subjects-filter-wrap"><label>المواد</label><div id="memory-subject-filters" class="memory-subject-filters"></div></div>
+          <div class="memory-period-caption" id="memory-period-caption"></div>
+        </div>
+        <div class="question-container"><canvas id="memories-chart" width="900" height="420"></canvas></div>
+      </div>
+      <div id="memories-time-tab" class="hidden">
+        <div id="memories-time-summary" class="progress-grid"></div>
+        <div class="hidden-panel visible history-panel">
+          <div class="panel-header history-toolbar"><h3>سجل الامتحانات</h3><div class="panel-header-actions history-toolbar-actions"><select id="memories-history-filter" onchange="renderMemories()"><option value="all">كل المواد</option></select><button class="btn-secondary" onclick="printMemoriesPdf()">🧾 حفظ PDF</button><button class="btn-danger" onclick="openHistoryDeleteDialog()">🗑️ حذف السجل</button></div></div>
+          <div class="memory-history-scroll"><div id="memories-history-list" class="selection-list"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="exam-settings-modal" class="modal-overlay hidden" onclick="if(event.target.id==='exam-settings-modal'){toggleExamSettings(false)}">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="panel-header modal-header"><h3 id="exam-settings-title">⚙️ Exam Settings</h3><button class="btn-close" onclick="toggleExamSettings(false)">✕</button></div>
+      <div class="setting-item"><label>السمة</label><select id="exam-theme-selector" onchange="changeTheme(this.value)"><option value="default">الافتراضي</option><option value="desert">البادية</option><option value="space">الفضاء</option><option value="pirates">القراصنة</option><option value="castle">القلعة</option><option value="lab">المختبر</option></select></div>
+      <div class="setting-item"><label>الصوت الخلفي</label><select id="exam-sound-selector" onchange="changeSound(this.value)"><option value="none">بدون صوت</option><option value="cafeteria">الكافيتيريا</option><option value="after-exam">بعد الامتحان</option><option value="beach">الشاطئ</option><option value="forest">الغابة</option><option value="fireplace">مدفأة حطب</option><option value="rain-thunder">أمطار رعدية</option><option value="rain-window">مطر على النافذة</option></select></div>
+      <div class="setting-item"><label>تفعيل الصوت الخلفي</label><label class="switch"><input type="checkbox" id="exam-bg-sound-enabled-toggle" onchange="toggleBackgroundSoundEnabled()"><span class="slider"></span></label></div>
+      <div class="setting-item"><label>مستوى الصوت</label><input type="range" id="exam-volume-control" min="0" max="100" value="50" oninput="changeVolume(this.value)"></div>
+      <div class="setting-item"><label>أصوات الإجابة الصحيحة والخاطئة</label><label class="switch"><input type="checkbox" id="exam-feedback-toggle" onchange="toggleFeedbackSounds()"><span class="slider"></span></label></div>
+    </div>
+  </div>
+
+  <div id="history-delete-modal" class="modal-overlay hidden" onclick="if(event.target.id==='history-delete-modal'){toggleHistoryDeleteModal(false)}">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="panel-header modal-header"><h3>🗑️ حذف سجل الذكريات</h3><button class="btn-close" onclick="toggleHistoryDeleteModal(false)">✕</button></div>
+      <div class="setting-item"><label>نطاق الحذف</label><select id="history-delete-scope" onchange="renderHistoryDeleteList()"><option value="visible">المعروض حاليًا</option><option value="all">كل السجل</option></select></div>
+      <div class="history-delete-scroll"><div id="history-delete-list" class="selection-list"></div></div>
+      <div class="dialog-actions" style="margin-top:16px;"><button class="btn-secondary" onclick="selectAllHistoryDeleteItems(true)">تحديد الكل</button><button class="btn-secondary" onclick="selectAllHistoryDeleteItems(false)">إلغاء التحديد</button><button class="btn-danger" onclick="confirmDeleteHistoryItems()">حذف</button></div>
+    </div>
+  </div>
+
+  <div id="dialog-overlay" class="dialog-overlay hidden" onclick="if(event.target.id==='dialog-overlay'){hideDialog()}">
+    <div class="dialog-card"><div class="dialog-header"><div id="dialog-title">تنبيه</div><button class="btn-close" onclick="hideDialog()">✕</button></div><div id="dialog-body" class="dialog-body"></div><div class="dialog-actions"><button id="dialog-cancel" class="btn-secondary hidden" onclick="dialogCancelAction()">إلغاء</button><button id="dialog-confirm" class="btn-primary" onclick="dialogConfirmAction()">موافق</button></div></div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <canvas id="fireworks-canvas" class="fireworks-canvas hidden"></canvas>
+  <audio id="bg-audio" preload="auto" loop></audio>
+  <audio id="right-audio" preload="auto"></audio>
+  <audio id="wrong-audio" preload="auto"></audio>
+  <audio id="celebrate-audio" preload="auto"></audio>
+  <script src="script.js"></script>
+  <script src="script_patch.js"></script>
+</body>
+</html>
