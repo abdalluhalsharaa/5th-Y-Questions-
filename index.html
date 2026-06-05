@@ -8,6 +8,113 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* Force 3 subjects per row in exams grid, prevent text wrapping */
+    .subject-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .subject-card .subject-badge-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* Landscape-only info bar */
+    .landscape-info {
+      display: none;
+      background: var(--primary-soft);
+      border-radius: 12px;
+      padding: 8px 16px;
+      margin: 8px 0 16px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+    @media (orientation: landscape) {
+      .landscape-info {
+        display: block;
+      }
+    }
+    /* Statistics apply button */
+    .btn-apply-stats {
+      background: var(--success);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    /* Checklist screen styles */
+    .checklist-subject {
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .checklist-subject-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: var(--card-gradient);
+      cursor: pointer;
+      font-weight: 800;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .checklist-subject-stats {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .checklist-lectures {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      background: var(--bg-card);
+    }
+    .checklist-lecture-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      background: var(--border-light);
+    }
+    .checklist-lecture-item.completed {
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+    .checklist-lecture-item input {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .checklist-lecture-item label {
+      flex: 1;
+      cursor: pointer;
+    }
+    /* Memory/history scroll fix */
+    .memories-history-list-container {
+      max-height: 60vh;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+    #memories-history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .history-toolbar {
+      position: sticky;
+      top: 0;
+      background: var(--bg-card);
+      z-index: 2;
+      padding-bottom: 8px;
+    }
+  </style>
 </head>
 <body>
   <div id="app">
@@ -25,6 +132,8 @@
         <button class="nav-btn nav-btn-featured" onclick="openExams()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-exams">📝</span></div><span class="nav-label">Exams</span></button>
         <button class="nav-btn" onclick="openSection('wrong')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-wrong">❌</span></div><span class="nav-label">Wrong Questions</span></button>
         <button class="nav-btn" onclick="openSection('favorites')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-favorites">⭐</span></div><span class="nav-label">Favorite Questions</span></button>
+        <!-- New Checklist Tab -->
+        <button class="nav-btn" onclick="openChecklist()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-checklist">✅</span></div><span class="nav-label">Checklist</span></button>
         <button class="nav-btn" onclick="openSection('search')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-search">🔍</span></div><span class="nav-label">Search</span></button>
         <button class="nav-btn" onclick="openStatisticsPage()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-statistics">📊</span></div><span class="nav-label">Statistics</span></button>
         <button class="nav-btn" onclick="toggleSettings()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-settings">⚙️</span></div><span class="nav-label">Settings</span></button>
@@ -43,7 +152,7 @@
       </div>
     </div>
 
-    <!-- New Statistics Page Screen -->
+    <!-- Statistics Screen -->
     <div id="statistics-screen" class="screen">
       <div class="screen-header">
         <button class="btn-back" onclick="closeStatisticsPage()">← رجوع</button>
@@ -57,13 +166,16 @@
       <div id="subjects-stats-list" class="subject-stats-list"></div>
     </div>
 
-    <!-- Statistics Exclusions Modal -->
+    <!-- Statistics Exclusions Modal with Apply button -->
     <div id="stats-exclusion-modal" class="modal-overlay hidden" onclick="if(event.target.id==='stats-exclusion-modal') closeStatsExclusionDialog()">
       <div class="modal-card" style="max-width: 90%; width: 560px;">
         <div class="panel-header modal-header"><h3>⚙️ إعدادات الإحصائيات</h3><button class="btn-close" onclick="closeStatsExclusionDialog()">✕</button></div>
         <div class="exclusion-section"><strong>المواد المستبعدة</strong><div id="subject-exclusions-list" class="exclusion-checkboxes"></div></div>
         <div class="exclusion-section"><strong>الأقسام المستبعدة</strong><div id="section-exclusions-list" class="exclusion-checkboxes"><label><input type="checkbox" id="exclude-lectures" onchange="saveStatsExclusions()"> المحاضرات (Lectures)</label><label><input type="checkbox" id="exclude-years" onchange="saveStatsExclusions()"> السنوات (Years)</label><label><input type="checkbox" id="exclude-ai" onchange="saveStatsExclusions()"> الذكاء الاصطناعي (AI)</label></div></div>
-        <div class="dialog-actions"><button class="btn-primary" onclick="closeStatsExclusionDialog()">إغلاق</button></div>
+        <div class="dialog-actions" style="margin-top:16px;">
+          <button class="btn-primary" onclick="applyStatsExclusionsAndRefresh()">✅ Apply</button>
+          <button class="btn-secondary" onclick="closeStatsExclusionDialog()">إغلاق</button>
+        </div>
       </div>
     </div>
 
@@ -76,7 +188,7 @@
       </div>
     </div>
 
-    <!-- Individual Subject Statistics Screen -->
+    <!-- Individual Subject Statistics Screen (Read-Only) -->
     <div id="subject-stats-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="closeSubjectStats()">← رجوع</button><h3 id="subject-stats-name"></h3><button class="btn-secondary" onclick="openSubjectStatsSettings()">⚙️</button></div>
       <div id="subject-stats-summary" class="subject-stats-summary"></div>
@@ -92,19 +204,24 @@
       </div>
     </div>
 
+    <!-- Exams Screen (Subjects) -->
     <div id="subjects-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3 id="subjects-screen-title">Subjects</h3></div>
       <div class="search-container compact-search"><input type="text" id="subjects-search" placeholder="ابحث عن المادة..." oninput="filterSubjects()"></div>
+      <!-- Landscape-only info bar -->
+      <div class="landscape-info">✨ Long press on subject name to reorder and pin</div>
       <div id="subjects-empty" class="empty-state"><div class="empty-icon">⏳</div><p id="subjects-empty-text">التحميل جارٍ ...</p></div>
       <div id="subjects-list" class="subject-grid"></div>
     </div>
 
+    <!-- Old subject sections (used for legacy) -->
     <div id="subject-sections-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="backToSubjects()">← رجوع</button><h3 id="subject-sections-title">Subject</h3></div>
       <div id="subject-sections-summary" class="subject-summary"></div>
       <div id="subject-categories" class="category-grid"></div>
     </div>
 
+    <!-- Selection Screen -->
     <div id="selection-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="backFromSelection()">← رجوع</button><h3 id="selection-title">Select</h3></div>
       <div id="selection-search-container" class="search-container compact-search hidden"><input type="text" id="selection-search" placeholder="ابحث..." oninput="filterSelectionList()"></div>
@@ -119,12 +236,20 @@
       </div>
     </div>
 
+    <!-- Search Screen -->
     <div id="search-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3>Search Questions</h3></div>
       <div class="search-container"><input type="text" id="search-input" placeholder="ابحث في السؤال أو الخيارات أو الشرح..." oninput="performSearch()"><select id="search-filter" onchange="performSearch()"><option value="all">All Subjects</option></select></div>
       <div id="search-results" class="search-results"></div>
     </div>
 
+    <!-- New Checklist Screen -->
+    <div id="checklist-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3>✅ Checklist - Lectures Progress</h3></div>
+      <div id="checklist-container" class="checklist-container"></div>
+    </div>
+
+    <!-- Exam Screen -->
     <div id="exam-screen" class="screen">
       <div class="exam-header"><button class="btn-back" onclick="exitExam()">← Exit</button><div class="exam-header-right"><div id="exam-timer" class="exam-timer hidden"></div><div id="exam-progress" class="exam-progress-badge"></div></div></div>
       <div id="question-grid" class="question-grid"></div>
@@ -133,6 +258,7 @@
       <div id="exam-nav" class="exam-nav"></div>
     </div>
 
+    <!-- Results Screen -->
     <div id="results-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="goHome()">← Home</button><h3 id="results-title">Results</h3></div>
       <div id="results-waiting" class="hidden"><div class="loading-spinner"></div><p id="waiting-message" class="waiting-msg">انتظر ...</p></div>
@@ -140,11 +266,13 @@
       <div id="results-review" class="hidden"></div>
     </div>
 
+    <!-- Readonly Screen -->
     <div id="readonly-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="closeReadonly()">← رجوع</button><h3>Question Viewer</h3></div>
       <div id="readonly-content"></div>
     </div>
 
+    <!-- Memories Screen with scroll fix -->
     <div id="memories-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3>📖 الذكريات</h3></div>
       <div class="mode-buttons memories-tabs">
@@ -163,12 +291,15 @@
         <div id="memories-time-summary" class="progress-grid"></div>
         <div class="hidden-panel visible">
           <div class="panel-header history-toolbar"><h3>سجل الامتحانات</h3><div class="panel-header-actions history-toolbar-actions"><select id="memories-history-filter" onchange="renderMemories()"><option value="all">كل المواد</option></select><button class="btn-secondary" onclick="printMemoriesPdf()">🧾 حفظ PDF</button><button class="btn-danger" onclick="openHistoryDeleteDialog()">🗑️ حذف السجل</button></div></div>
-          <div id="memories-history-list" class="selection-list"></div>
+          <div class="memories-history-list-container">
+            <div id="memories-history-list" class="selection-list"></div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Exam Settings Modal -->
   <div id="exam-settings-modal" class="modal-overlay hidden" onclick="if(event.target.id==='exam-settings-modal'){toggleExamSettings(false)}">
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="panel-header modal-header"><h3 id="exam-settings-title">⚙️ Exam Settings</h3><button class="btn-close" onclick="toggleExamSettings(false)">✕</button></div>
@@ -180,6 +311,7 @@
     </div>
   </div>
 
+  <!-- History Delete Modal -->
   <div id="history-delete-modal" class="modal-overlay hidden" onclick="if(event.target.id==='history-delete-modal'){toggleHistoryDeleteModal(false)}">
     <div class="modal-card" role="dialog" aria-modal="true">
       <div class="panel-header modal-header"><h3>🗑️ حذف سجل الذكريات</h3><button class="btn-close" onclick="toggleHistoryDeleteModal(false)">✕</button></div>
@@ -189,6 +321,7 @@
     </div>
   </div>
 
+  <!-- General Dialog -->
   <div id="dialog-overlay" class="dialog-overlay hidden" onclick="if(event.target.id==='dialog-overlay'){hideDialog()}">
     <div class="dialog-card"><div class="dialog-header"><div id="dialog-title">تنبيه</div><button class="btn-close" onclick="hideDialog()">✕</button></div><div id="dialog-body" class="dialog-body"></div><div class="dialog-actions"><button id="dialog-cancel" class="btn-secondary hidden" onclick="dialogCancelAction()">إلغاء</button><button id="dialog-confirm" class="btn-primary" onclick="dialogConfirmAction()">موافق</button></div></div>
   </div>
@@ -201,5 +334,14 @@
   <audio id="celebrate-audio" preload="auto"></audio>
   <script src="script.js"></script>
   <script src="script_patch.js"></script>
+  <script>
+    // Dummy implementations for new functions (will be overridden by script.js)
+    window.openChecklist = function() { console.log("Checklist opened"); };
+    window.applyStatsExclusionsAndRefresh = function() {
+      if(typeof saveStatsExclusions === 'function') saveStatsExclusions();
+      if(typeof renderStatisticsPage === 'function') renderStatisticsPage();
+      if(typeof closeStatsExclusionDialog === 'function') closeStatsExclusionDialog();
+    };
+  </script>
 </body>
 </html>
