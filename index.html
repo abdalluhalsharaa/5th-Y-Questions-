@@ -20,9 +20,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    /* Landscape-only info bar */
-    .landscape-info {
-      display: none;
+    /* Fixed hint bar visibility (only in exams screen under search bar) */
+    .exams-hint-bar {
+      display: block;
       background: var(--primary-soft);
       border-radius: 12px;
       padding: 8px 16px;
@@ -32,22 +32,32 @@
       color: var(--primary);
       border: 1px solid var(--border);
     }
-    @media (orientation: landscape) {
-      .landscape-info {
-        display: block;
-      }
+    /* Hidden by default, shown only in exams screen */
+    .exams-hint-bar {
+      display: none;
     }
-    /* Statistics apply button */
-    .btn-apply-stats {
-      background: var(--success);
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 12px;
-      cursor: pointer;
-      font-weight: 700;
+    #subjects-screen .exams-hint-bar {
+      display: block;
     }
-    /* Checklist screen styles */
+    /* Memory/history scroll fix */
+    .memories-history-list-container {
+      max-height: 60vh;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+    #memories-history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .history-toolbar {
+      position: sticky;
+      top: 0;
+      background: var(--bg-card);
+      z-index: 2;
+      padding-bottom: 8px;
+    }
+    /* Checklist styles */
     .checklist-subject {
       margin-bottom: 20px;
       border: 1px solid var(--border);
@@ -96,23 +106,31 @@
       flex: 1;
       cursor: pointer;
     }
-    /* Memory/history scroll fix */
-    .memories-history-list-container {
-      max-height: 60vh;
-      overflow-y: auto;
-      margin-bottom: 16px;
+    /* Statistics apply button */
+    .btn-apply-stats {
+      background: var(--success);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
     }
-    #memories-history-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    /* Landscape fixes */
+    @media (max-width: 767px) {
+      .subject-grid {
+        grid-template-columns: 1fr;
+      }
     }
-    .history-toolbar {
-      position: sticky;
-      top: 0;
-      background: var(--bg-card);
-      z-index: 2;
-      padding-bottom: 8px;
+    @media (orientation: landscape) and (max-width: 900px) {
+      .subject-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (orientation: landscape) and (min-width: 901px) {
+      .subject-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
     }
   </style>
 </head>
@@ -132,7 +150,7 @@
         <button class="nav-btn nav-btn-featured" onclick="openExams()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-exams">📝</span></div><span class="nav-label">Exams</span></button>
         <button class="nav-btn" onclick="openSection('wrong')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-wrong">❌</span></div><span class="nav-label">Wrong Questions</span></button>
         <button class="nav-btn" onclick="openSection('favorites')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-favorites">⭐</span></div><span class="nav-label">Favorite Questions</span></button>
-        <!-- New Checklist Tab -->
+        <!-- Checklist Tab -->
         <button class="nav-btn" onclick="openChecklist()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-checklist">✅</span></div><span class="nav-label">Checklist</span></button>
         <button class="nav-btn" onclick="openSection('search')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-search">🔍</span></div><span class="nav-label">Search</span></button>
         <button class="nav-btn" onclick="openStatisticsPage()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-statistics">📊</span></div><span class="nav-label">Statistics</span></button>
@@ -171,7 +189,7 @@
       <div class="modal-card" style="max-width: 90%; width: 560px;">
         <div class="panel-header modal-header"><h3>⚙️ إعدادات الإحصائيات</h3><button class="btn-close" onclick="closeStatsExclusionDialog()">✕</button></div>
         <div class="exclusion-section"><strong>المواد المستبعدة</strong><div id="subject-exclusions-list" class="exclusion-checkboxes"></div></div>
-        <div class="exclusion-section"><strong>الأقسام المستبعدة</strong><div id="section-exclusions-list" class="exclusion-checkboxes"><label><input type="checkbox" id="exclude-lectures" onchange="saveStatsExclusions()"> المحاضرات (Lectures)</label><label><input type="checkbox" id="exclude-years" onchange="saveStatsExclusions()"> السنوات (Years)</label><label><input type="checkbox" id="exclude-ai" onchange="saveStatsExclusions()"> الذكاء الاصطناعي (AI)</label></div></div>
+        <div class="exclusion-section"><strong>الأقسام المستبعدة</strong><div id="section-exclusions-list" class="exclusion-checkboxes"><label><input type="checkbox" id="exclude-lectures"> المحاضرات (Lectures)</label><label><input type="checkbox" id="exclude-years"> السنوات (Years)</label><label><input type="checkbox" id="exclude-ai"> الذكاء الاصطناعي (AI)</label></div></div>
         <div class="dialog-actions" style="margin-top:16px;">
           <button class="btn-primary" onclick="applyStatsExclusionsAndRefresh()">✅ Apply</button>
           <button class="btn-secondary" onclick="closeStatsExclusionDialog()">إغلاق</button>
@@ -200,7 +218,7 @@
       <div class="modal-card">
         <div class="panel-header modal-header"><h3>إعدادات عرض المادة</h3><button class="btn-close" onclick="closeSubjectStatsSettings()">✕</button></div>
         <div id="subject-sections-toggle-list" class="exclusion-checkboxes"></div>
-        <div class="dialog-actions"><button class="btn-primary" onclick="closeSubjectStatsSettings()">إغلاق</button></div>
+        <div class="dialog-actions"><button class="btn-primary" onclick="applySubjectStatsSettingsAndRefresh()">✅ Apply</button><button class="btn-secondary" onclick="closeSubjectStatsSettings()">إلغاء</button></div>
       </div>
     </div>
 
@@ -208,8 +226,8 @@
     <div id="subjects-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3 id="subjects-screen-title">Subjects</h3></div>
       <div class="search-container compact-search"><input type="text" id="subjects-search" placeholder="ابحث عن المادة..." oninput="filterSubjects()"></div>
-      <!-- Landscape-only info bar -->
-      <div class="landscape-info">✨ Long press on subject name to reorder and pin</div>
+      <!-- Fixed hint bar: only in Exams section under search bar -->
+      <div class="exams-hint-bar">اضغط مطولًا على المادة لتثبيتها أو نقلها للأعلى أو للأسفل 💫</div>
       <div id="subjects-empty" class="empty-state"><div class="empty-icon">⏳</div><p id="subjects-empty-text">التحميل جارٍ ...</p></div>
       <div id="subjects-list" class="subject-grid"></div>
     </div>
@@ -243,7 +261,7 @@
       <div id="search-results" class="search-results"></div>
     </div>
 
-    <!-- New Checklist Screen -->
+    <!-- Checklist Screen -->
     <div id="checklist-screen" class="screen">
       <div class="screen-header"><button class="btn-back" onclick="goHome()">← رجوع</button><h3>✅ Checklist - Lectures Progress</h3></div>
       <div id="checklist-container" class="checklist-container"></div>
@@ -335,12 +353,17 @@
   <script src="script.js"></script>
   <script src="script_patch.js"></script>
   <script>
-    // Dummy implementations for new functions (will be overridden by script.js)
+    // Dummy implementation for new functions (will be overridden by script.js)
     window.openChecklist = function() { console.log("Checklist opened"); };
     window.applyStatsExclusionsAndRefresh = function() {
       if(typeof saveStatsExclusions === 'function') saveStatsExclusions();
       if(typeof renderStatisticsPage === 'function') renderStatisticsPage();
       if(typeof closeStatsExclusionDialog === 'function') closeStatsExclusionDialog();
+    };
+    window.applySubjectStatsSettingsAndRefresh = function() {
+      if(typeof saveSubjectStatsSettings === 'function') saveSubjectStatsSettings();
+      if(typeof renderSubjectStats === 'function') renderSubjectStats();
+      if(typeof closeSubjectStatsSettings === 'function') closeSubjectStatsSettings();
     };
   </script>
 </body>
