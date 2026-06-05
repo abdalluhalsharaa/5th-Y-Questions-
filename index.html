@@ -26,21 +26,9 @@
         <button class="nav-btn" onclick="openSection('wrong')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-wrong">❌</span></div><span class="nav-label">Wrong Questions</span></button>
         <button class="nav-btn" onclick="openSection('favorites')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-favorites">⭐</span></div><span class="nav-label">Favorite Questions</span></button>
         <button class="nav-btn" onclick="openSection('search')"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-search">🔍</span></div><span class="nav-label">Search</span></button>
-        <button class="nav-btn" onclick="toggleStatistics()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-statistics">📊</span></div><span class="nav-label">Statistics</span></button>
+        <button class="nav-btn" onclick="openStatisticsPage()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-statistics">📊</span></div><span class="nav-label">Statistics</span></button>
         <button class="nav-btn" onclick="toggleSettings()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-settings">⚙️</span></div><span class="nav-label">Settings</span></button>
         <button class="nav-btn nav-btn-memories" onclick="openMemories()"><div class="nav-icon-wrap"><span class="nav-icon" id="nav-icon-memories">📖</span></div><span class="nav-label">Memories</span></button>
-      </div>
-
-      <div id="statistics-panel" class="hidden-panel">
-        <div class="panel-header">
-          <h3 id="statistics-title">📊 الإحصائيات</h3>
-          <div class="panel-header-actions">
-            <button class="btn-secondary btn-mini" onclick="toggleStatisticsSettings(true)">⚙️ إعدادات الإحصائيات</button>
-            <button class="btn-close" onclick="toggleStatistics()">✕</button>
-          </div>
-        </div>
-        <div id="stats-content"></div>
-        <div class="panel-actions"><button class="btn-danger" onclick="resetProgress()">إعادة ضبط جميع البيانات</button></div>
       </div>
 
       <div id="settings-panel" class="hidden-panel">
@@ -52,6 +40,55 @@
         <div class="setting-item"><label>مستوى الصوت</label><input type="range" id="volume-control" min="0" max="100" value="50" oninput="changeVolume(this.value)"></div>
         <div class="setting-item"><label>أصوات الإجابة الصحيحة والخاطئة</label><label class="switch"><input type="checkbox" id="feedback-toggle" onchange="toggleFeedbackSounds()"><span class="slider"></span></label></div>
         <div class="setting-item"><label>الحركات</label><label class="switch"><input type="checkbox" id="animations-toggle" onchange="toggleAnimations()"><span class="slider"></span></label></div>
+      </div>
+    </div>
+
+    <!-- New Statistics Page Screen -->
+    <div id="statistics-screen" class="screen">
+      <div class="screen-header">
+        <button class="btn-back" onclick="closeStatisticsPage()">← رجوع</button>
+        <h3 id="statistics-screen-title">📊 الإحصائيات</h3>
+        <div>
+          <button class="btn-secondary btn-mini" onclick="openStatsExclusionDialog()">⚙️</button>
+          <button class="btn-danger btn-mini" onclick="openResetModal()">🗑️ إعادة ضبط</button>
+        </div>
+      </div>
+      <div id="global-stats-container" class="stats-summary-grid"></div>
+      <div id="subjects-stats-list" class="subject-stats-list"></div>
+    </div>
+
+    <!-- Statistics Exclusions Modal -->
+    <div id="stats-exclusion-modal" class="modal-overlay hidden" onclick="if(event.target.id==='stats-exclusion-modal') closeStatsExclusionDialog()">
+      <div class="modal-card" style="max-width: 90%; width: 560px;">
+        <div class="panel-header modal-header"><h3>⚙️ إعدادات الإحصائيات</h3><button class="btn-close" onclick="closeStatsExclusionDialog()">✕</button></div>
+        <div class="exclusion-section"><strong>المواد المستبعدة</strong><div id="subject-exclusions-list" class="exclusion-checkboxes"></div></div>
+        <div class="exclusion-section"><strong>الأقسام المستبعدة</strong><div id="section-exclusions-list" class="exclusion-checkboxes"><label><input type="checkbox" id="exclude-lectures" onchange="saveStatsExclusions()"> المحاضرات (Lectures)</label><label><input type="checkbox" id="exclude-years" onchange="saveStatsExclusions()"> السنوات (Years)</label><label><input type="checkbox" id="exclude-ai" onchange="saveStatsExclusions()"> الذكاء الاصطناعي (AI)</label></div></div>
+        <div class="dialog-actions"><button class="btn-primary" onclick="closeStatsExclusionDialog()">إغلاق</button></div>
+      </div>
+    </div>
+
+    <!-- Reset Statistics Modal -->
+    <div id="reset-stats-modal" class="modal-overlay hidden" onclick="if(event.target.id==='reset-stats-modal') closeResetModal()">
+      <div class="modal-card" style="max-width: 90%; width: 560px;">
+        <div class="panel-header modal-header"><h3>إعادة ضبط البيانات (جزئي أو كلي)</h3><button class="btn-close" onclick="closeResetModal()">✕</button></div>
+        <div class="reset-step" id="reset-step1"><strong>اختر المواد المراد إعادة ضبط تقدمها:</strong><div id="reset-subjects-list" class="exclusion-checkboxes"></div><div class="dialog-actions"><button class="btn-primary" onclick="showResetConfirmation()">التالي</button></div></div>
+        <div class="reset-step hidden" id="reset-step2"><div id="reset-confirm-msg"></div><div class="dialog-actions"><button class="btn-secondary" onclick="goResetStep1()">رجوع</button><button class="btn-danger" onclick="executeResetStatistics()">تأكيد الحذف</button></div></div>
+      </div>
+    </div>
+
+    <!-- Individual Subject Statistics Screen -->
+    <div id="subject-stats-screen" class="screen">
+      <div class="screen-header"><button class="btn-back" onclick="closeSubjectStats()">← رجوع</button><h3 id="subject-stats-name"></h3><button class="btn-secondary" onclick="openSubjectStatsSettings()">⚙️</button></div>
+      <div id="subject-stats-summary" class="subject-stats-summary"></div>
+      <div id="subject-sections-buttons" class="subject-sections-buttons"></div>
+    </div>
+
+    <!-- Subject Stats Settings Modal -->
+    <div id="subject-stats-settings-modal" class="modal-overlay hidden" onclick="if(event.target.id==='subject-stats-settings-modal') closeSubjectStatsSettings()">
+      <div class="modal-card">
+        <div class="panel-header modal-header"><h3>إعدادات عرض المادة</h3><button class="btn-close" onclick="closeSubjectStatsSettings()">✕</button></div>
+        <div id="subject-sections-toggle-list" class="exclusion-checkboxes"></div>
+        <div class="dialog-actions"><button class="btn-primary" onclick="closeSubjectStatsSettings()">إغلاق</button></div>
       </div>
     </div>
 
@@ -140,15 +177,6 @@
       <div class="setting-item"><label>تفعيل الصوت الخلفي</label><label class="switch"><input type="checkbox" id="exam-bg-sound-enabled-toggle" onchange="toggleBackgroundSoundEnabled()"><span class="slider"></span></label></div>
       <div class="setting-item"><label>مستوى الصوت</label><input type="range" id="exam-volume-control" min="0" max="100" value="50" oninput="changeVolume(this.value)"></div>
       <div class="setting-item"><label>أصوات الإجابة الصحيحة والخاطئة</label><label class="switch"><input type="checkbox" id="exam-feedback-toggle" onchange="toggleFeedbackSounds()"><span class="slider"></span></label></div>
-    </div>
-  </div>
-
-  <div id="stats-settings-modal" class="modal-overlay hidden" onclick="if(event.target.id==='stats-settings-modal'){toggleStatisticsSettings(false)}">
-    <div class="modal-card" role="dialog" aria-modal="true">
-      <div class="panel-header modal-header"><h3>⚙️ إعدادات الإحصائيات</h3><button class="btn-close" onclick="toggleStatisticsSettings(false)">✕</button></div>
-      <div class="setting-item"><label>إظهار Lectures</label><label class="switch"><input type="checkbox" id="stats-show-lectures" onchange="updateStatisticsType('lectures', this.checked)"><span class="slider"></span></label></div>
-      <div class="setting-item"><label>إظهار Years</label><label class="switch"><input type="checkbox" id="stats-show-years" onchange="updateStatisticsType('years', this.checked)"><span class="slider"></span></label></div>
-      <div class="setting-item"><label>إظهار AI</label><label class="switch"><input type="checkbox" id="stats-show-ai" onchange="updateStatisticsType('ai', this.checked)"><span class="slider"></span></label></div>
     </div>
   </div>
 
