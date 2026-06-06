@@ -544,18 +544,24 @@ function confirmStartExam(){ try{ if(!state.selectedMode || !state.selectedDirec
 function prepareQuestionForExam(question){
   const clone = JSON.parse(JSON.stringify(question));
   const baseOptions = (clone.options || []).map(opt => stripOptionPrefix(opt));
+
+  // نحافظ على نفس ترتيب الخيارات كما هو في ملف الـ TXT
   clone.originalOptions = baseOptions.slice();
-  clone.correctAnswerText = getCorrectAnswerText({ ...clone, options: baseOptions, originalOptions: baseOptions.slice() });
-  const shuffledOptions = shuffleArray(baseOptions).map((opt, idx, arr) => {
-    const normalized = normalizeComparisonText(opt);
-    const duplicatesBefore = arr.slice(0, idx).filter(prev => normalizeComparisonText(prev) === normalized).length;
-    return duplicatesBefore ? `${opt}${'\u200C'.repeat(duplicatesBefore)}` : opt;
+  clone.options = baseOptions.slice();
+
+  // نحسب الإجابة الصحيحة بناءً على الترتيب الأصلي غير المعدل
+  clone.correctAnswerText = getCorrectAnswerText({
+    ...clone,
+    options: baseOptions,
+    originalOptions: baseOptions.slice()
   });
-  clone.options = shuffledOptions;
+
   clone.correctAnswer = clone.correctAnswerText;
   clone.correctIndex = resolveCorrectIndex(clone.options, clone.correctAnswerText);
+
   return clone;
 }
+
 function startExamSession(questions,mode,direction,sourceLabel,extraMinutes,meta){ state.currentExam={ mode, direction, sourceLabel:sourceLabel||'custom', collectionType: meta && meta.collectionType ? meta.collectionType : null, displayLabel: meta && meta.displayLabel ? meta.displayLabel : (sourceLabel||'Exam'), historySubjectName: meta?.historySubjectName || null, historyGroups: meta?.historyGroups || [], questions:questions.map(q=>Object.assign({},q)), currentIndex:0, answers:new Array(questions.length).fill(null), firstAnswers:new Array(questions.length).fill(null), startTime:Date.now(), totalTime:(questions.length+(extraMinutes||0))*60*1000, submitted:false, showAnswer:false, masteredWrongIds:[] }; saveExamState(); showScreen('exam-screen'); renderExam(); if(mode==='exam') startTimer(); scrollQuestionIntoView(false); }
 function renderRemoveWrongBtn(){ if(!state.currentExam || state.currentExam.collectionType!=='wrong' || state.currentExam.mode!=='training') return ''; const idx=state.currentExam.currentIndex; const q=state.currentExam.questions[idx]; const answered=state.currentExam.firstAnswers[idx]; if(answered===null || !isAnswerCorrect(q, answered) || !state.wrongQuestions.includes(q.id)) return ''; return `<button class="btn-secondary mt-20" onclick="confirmRemoveCurrentWrong()">✅ إزالة السؤال من الأخطاء</button>`; }
 function startSpecialExam(questions, mode, direction){ startExamSession(shuffleArray(questions.slice()).map(prepareQuestionForExam), mode, direction||'twoway', 'special', 5, { collectionType:null, displayLabel:'Special Exam', historySubjectName:'Special Exam', historyGroups:[] }); }
