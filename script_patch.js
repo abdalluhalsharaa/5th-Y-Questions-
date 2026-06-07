@@ -378,7 +378,7 @@
     const sectionType = normalizeSectionType((state.currentSelectionMeta || {}).sectionType || state.currentGroups[0]?.type);
     resetSectionToOriginalOrder(subjectName, sectionType);
     renderSelectionScreenWithEnhancements();
-    showToast('تمت إعادة ترتيب هذا القسم وفق ترتيب GitHub الأصلي.', 'success');
+    showToast('تم إعادة ترتيب المحاضرات وفقًا للترتيب الأصلي.', 'success');
   };
 
   // --- Themes / settings / dark mode visibility ---
