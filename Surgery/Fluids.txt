@@ -1,0 +1,37 @@
+A 95 kg patient sustains a 42% Total Body Surface Area (TBSA) burn. He received 3 liters of 
+crystalloid before arrival, 4 hours post-burn. Using the Parkland formula, what is the hourly 
+infusion rate for the remaining 4 hours of the first 8hour period?
+ A) 800 mL/hr
+ B) 1000 mL/hr
+ C) 1250 mL/hr
+ D) 1500 mL/hr
+ E) 1800 mL/hr
+Correct Answer: C) 1250 mL/hr
+Explanation: 1. Total fluid 24h = 4 mL x 95 kg x 42 = 15,960 mL. 2. First 8h requirement (50%) = 7,980 mL. 
+3. Fluid already given = 3,000 mL. 4. Remaining fluid for first 8h = 4,980 mL. 5. Time remaining in first 8h 
+window = 4 hours. 6. Rate = 4,980 mL / 4 hr = 1,245 mL/hr (closest to 1250).
+###
+A 70-year-old male sustains a high-voltage electrical burn. On admission, his urine is dark 
+in color, and urine output is 30 mL/hr. Compartment pressure in the affected limb is 20 mmHg. 
+What is the main complication that should be anticipated and treated in this patient?
+ A) Acute renal failure
+ B) Cardiac arrhythmia
+ C) Compartment syndrome requiring fasciotomy
+ D) Curling's ulcer
+ E) Pulmonary embolism
+Correct Answer: A) Acute renal failure
+Explanation: Dark urine after a high-voltage electrical burn suggests myoglobinuria due to rhabdomyolysis. 
+This places the patient at high risk of acute kidney injury and requires prompt fluid resuscitation and 
+monitoring.
+###
+Large volume resuscitation with 0.9% Normal Saline is associated with which acid-base 
+disturbance?
+ A) Metabolic alkalosis
+ B) Respiratory acidosis
+ C) Hyperchloremic metabolic acidosis
+ D) Hypochloremic metabolic acidosis
+ E) Respiratory alkalosis
+Correct Answer: C) Hyperchloremic metabolic acidosis
+Explanation: Normal saline contains high levels of chloride (154 mEq/L) compared to plasma. Excessive 
+administration leads to hyperchloremia and a normal anion gap metabolic acidosis.
+###
