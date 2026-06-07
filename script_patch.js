@@ -210,6 +210,23 @@
     actions.querySelectorAll('.dialog-extra-btn').forEach(btn => btn.remove());
   }
 
+  function appendMoveToBottomButton(group){
+    const actions = document.querySelector('#dialog-overlay .dialog-actions');
+    if(!actions) return;
+    actions.querySelectorAll('.dialog-extra-btn').forEach(btn => btn.remove());
+
+    const moveBtn = document.createElement('button');
+    moveBtn.className = 'btn-primary dialog-extra-btn';
+    moveBtn.textContent = 'نعم ونقلها للأسفل';
+    moveBtn.onclick = function(){
+      hideDialog();
+      setGroupCompleted(group.id, true, { moveBottom:true, countAsAnswered:true });
+      showToast('تم تعليم العنصر كمكتمل ونقله للأسفل.', 'success');
+    };
+
+    actions.appendChild(moveBtn);
+  }
+
   window.confirmCompleteGroup = function(idx){
     const group = (state.currentGroups || [])[idx];
     if(!group) return;
@@ -244,6 +261,7 @@
       },
       onCancel:()=>{}
     });
+    setTimeout(() => appendMoveToBottomButton(group), 0);
   };
 
   window.toggleChecklistGroupCompletion = function(groupId){
@@ -381,7 +399,6 @@
     showToast('تم إعادة ترتيب المحاضرات وفقًا للترتيب الأصلي.', 'success');
   };
 
-  // --- Themes / settings / dark mode visibility ---
   THEMES.doctor = {
     icons:{exams:'🩺',wrong:'💉',favorites:'🫀',checklist:'☑️',search:'🔎',statistics:'🧾',settings:'⚕️',lectures:'🧠',ai:'🧬',years:'📅',start:'🏥',results:'🏅',progress:'📈',location:'📍',success:'✅',error:'💉',review:'📝',subject:'🩻'},
     texts:{startExam:'🏥 Start Round',resultsTitle:'Clinical Report',statsTitle:'🧾 إحصائيات الطبيب',settingsTitle:'⚕️ إعدادات الطبيب',examSettingsTitle:'⚕️ Clinical Settings',examSettingsButton:'⚕️ Exam Settings',trainingLabel:'Clinical Training',examLabel:'Clinical Exam'}
@@ -476,7 +493,6 @@
     if(typeof renderMemories === 'function') renderMemories();
   };
 
-  // no option shuffle
   prepareQuestionForExam = function(question){
     const clone = JSON.parse(JSON.stringify(question));
     const baseOptions = (clone.options || []).map(opt => stripOptionPrefix(opt));
@@ -533,17 +549,15 @@
     if(!state.currentExam) return; const reviewDiv=el('results-review'); reviewDiv.classList.remove('hidden'); let html='<h3 class="mt-20" style="text-align:right">'+theme().icons.review+' Review</h3>';
     state.currentExam.questions.forEach((q,idx)=>{ const answersUsed = state.currentExam.mode==='exam' ? state.currentExam.answers : state.currentExam.firstAnswers; const userAnswer=answersUsed[idx]; const correctIdx=getCorrectIndex(q); const ok=userAnswer===correctIdx; html += `<div class="question-container review-question-card mt-10" style="border-inline-start:4px solid ${ok?'var(--success)':'var(--danger)'};"><div class="question-header"><span class="question-number">Q${escapeHtml(q.number||String(idx+1))}</span><span style="color:${ok?'var(--success)':'var(--danger)'};font-weight:900;">${ok?theme().icons.success+' Correct':theme().icons.error+' Wrong'}</span></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>{ let cls='option-btn'; if(i===correctIdx) cls+=' correct'; if(i===userAnswer && i!==correctIdx) cls+=' wrong'; return '<div class="'+cls+'" style="cursor:default;"><span class="option-label">'+LETTERS[i]+')</span>'+escapeHtml(cleanOptionDisplay(opt))+'</div>'; }).join('')}</div><div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswer(q))}</span></div><div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div></div>`; }); reviewDiv.innerHTML=html; };
 
-  // stats logic: unique questions, instant updates, all sections visible by default
   getSubjectVisibilitySettings = function(subjectId){
     return Object.assign({ lectures:true, years:true, ai:true }, state.subjectStatsSettings[subjectId] || {});
   };
   function getVisibleSubjectGroups(subject){
     const settings = getSubjectVisibilitySettings(subject.id);
-    const groups = [];
-    if(!isSectionExcluded('lecture') && settings.lectures !== false) groups.push(...(subject.lectures||[]));
-    if(!isSectionExcluded('year') && settings.years !== false) groups.push(...(subject.years||[]));
-    if(!isSectionExcluded('ai') && settings.ai !== false) groups.push(...(subject.ai||[]));
-    return groups;
+    const lectureGroups = (!isSectionExcluded('lecture') && settings.lectures !== false) ? (subject.lectures || []) : [];
+    const yearGroups = (!isSectionExcluded('year') && settings.years !== false) ? (subject.years || []) : [];
+    const aiGroups = (!isSectionExcluded('ai') && settings.ai !== false) ? (subject.ai || []) : [];
+    return [].concat(lectureGroups, yearGroups, aiGroups);
   }
   getSubjectTotalQuestions = function(subject){
     const ids = new Set();
@@ -571,7 +585,32 @@
     return { totalQuestions, answeredQuestions, remainingQuestions: Math.max(0,totalQuestions-answeredQuestions), percentage };
   };
 
-  // checklist subject screen remains lectures only
+  renderSubjectStats = function(){
+    const subject = state.currentSubject;
+    if(!subject) return;
+    const settings = getSubjectVisibilitySettings(subject.id);
+    const t = theme();
+    if(el('subject-stats-name')) el('subject-stats-name').textContent = subject.name;
+    const total = getSubjectTotalQuestions(subject);
+    const answered = getSubjectAnsweredCount(subject);
+    const remaining = Math.max(0,total-answered);
+    const pct = total > 0 ? Math.round((answered/total)*100) : 0;
+    if(el('subject-stats-summary')) el('subject-stats-summary').innerHTML = `
+      <div class="progress-card">
+        <h4>${t.icons.subject} ${escapeHtml(subject.name)}</h4>
+        <p><span>إجمالي الأسئلة</span><strong>${total}</strong></p>
+        <p><span>المنجز</span><strong>${answered}</strong></p>
+        <p><span>المتبقي</span><strong>${remaining}</strong></p>
+        <div class="progress-bar"><span style="width:${pct}%"></span></div>
+        <p><span>نسبة الإنجاز</span><strong>${pct}%</strong></p>
+      </div>`;
+    const sections = [];
+    if((subject.lectures||[]).length && !isSectionExcluded('lecture') && settings.lectures !== false) sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
+    if((subject.years||[]).length && !isSectionExcluded('year') && settings.years !== false) sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
+    if((subject.ai||[]).length && !isSectionExcluded('ai') && settings.ai !== false) sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الاصطناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
+    if(el('subject-stats-sections')) el('subject-stats-sections').innerHTML = sections.length ? sections.join('') : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حالياً.</p></div>';
+  };
+
   renderChecklistSubject = function(){
     const subject = state.currentSubject;
     if(!subject) return;
@@ -598,7 +637,6 @@
     }).join('') : '<div class="empty-state"><p>لا توجد محاضرات ضمن هذه المادة.</p></div>';
   };
 
-  // selection screen wrapper
   const __origShowSelectionScreen = typeof showSelectionScreen === 'function' ? showSelectionScreen : null;
   showSelectionScreen = function(groups, title, meta){
     const subjectName = state.currentSubject?.name || groups?.[0]?.subjectName || 'unknown';
@@ -608,7 +646,6 @@
     if(shouldEnhanceSelectionScreen()) renderSelectionScreenWithEnhancements();
   };
 
-  // force remove years exclusion option/behavior
   openStatsExclusionDialog = (function(original){
     return function(){
       if(original) original();
@@ -629,7 +666,6 @@
     };
   })(typeof applyStatsExclusions === 'function' ? applyStatsExclusions : null);
 
-  // settings page
   function ensureSettingsScreen(){
     let screen = el('settings-screen');
     const panel = el('settings-panel');
@@ -652,7 +688,6 @@
     showScreen('settings-screen');
   };
 
-  // delete history scopes
   function renderHistoryDeleteScopeOptions(forceValue){
     const sel = el('history-delete-scope');
     if(!sel) return;
@@ -686,13 +721,20 @@
   }
 
   renderHistoryDeleteList = function(){
-    const list=el('history-delete-list');
-    const items = getHistoryItemsForDeletion();
+    const list = el('history-delete-list');
+    const sel = el('history-delete-scope');
     if(!list) return;
+
+    const selectedValue = sel ? (sel.value || state.historyDeleteState.baseScope || 'all') : (state.historyDeleteState.baseScope || 'all');
+    const actualScope = selectedValue === 'manual' ? (state.historyDeleteState.baseScope || 'all') : selectedValue;
+    const base = state.examHistory.slice().sort((a,b)=>(b.endedAt||0)-(a.endedAt||0));
+    const items = actualScope === 'all' ? base : base.filter(item => item.subjectName === actualScope);
+
     list.innerHTML = items.length ? items.map(item=>`<label class="selection-item selected" style="--subject-color:${getSubjectColor(item.subjectName)}"><input type="checkbox" class="history-delete-checkbox" value="${escapeAttribute(item.id)}" checked><div><div class="history-subject" style="margin-bottom:6px;">${escapeHtml(item.subjectName || 'Unknown Subject')}</div><strong>${escapeHtml(formatHistorySubLabel(item))}</strong><br><small style="color:var(--text-light)">${formatDateTime(item.endedAt)}</small></div></label>`).join('') : '<div class="stats-empty-note">لا توجد عناصر متاحة للحذف.</div>';
     document.querySelectorAll('.history-delete-checkbox').forEach(cb => cb.addEventListener('change', updateHistoryDeleteScopeManualState));
     state.historyDeleteState.ids = items.map(item => item.id);
-    renderHistoryDeleteScopeOptions(state.historyDeleteState.baseScope || el('history-delete-scope')?.value || 'all');
+    state.historyDeleteState.baseScope = actualScope;
+    renderHistoryDeleteScopeOptions(selectedValue === 'manual' ? 'manual' : actualScope);
   };
 
   selectAllHistoryDeleteItems = function(checked){
@@ -711,7 +753,6 @@
   };
   openHistoryDeleteDialog = function(){ toggleHistoryDeleteModal(true); };
 
-  // styling injected here to avoid touching style.css
   const st = document.createElement('style');
   st.id = 'medical-app-patch-v4-style';
   st.textContent = `
@@ -743,7 +784,6 @@
   `;
   document.head.appendChild(st);
 
-  // keep memory aggregation patch from prior version if needed
   aggregateMemorySeries = function(period, detailed, selectedSubjects){
     const entries = Object.entries(state.questionsFirstSeen || {})
       .map(([qid,info]) => ({ qid, ts:Number(info.ts||0), subjectName:info.subjectName||'غير معروف' }))
