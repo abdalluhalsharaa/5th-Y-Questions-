@@ -477,6 +477,7 @@
     if(__origApplyBackgroundSound) __origApplyBackgroundSound();
     if(__origApplyEffectAudioVolumes) __origApplyEffectAudioVolumes();
     updateDarkModeSettingVisibility();
+    ensureGlobalHomeButtons();
   };
 
   changeTheme = function(name){
@@ -646,6 +647,7 @@
     const toolbar = ensureSelectionBulkToolbar();
     if(toolbar) toolbar.classList.toggle('hidden', !shouldEnhanceSelectionScreen());
     if(shouldEnhanceSelectionScreen()) renderSelectionScreenWithEnhancements();
+    ensureGlobalHomeButtons();
   };
 
   openStatsExclusionDialog = (function(original){
@@ -683,7 +685,69 @@
     return screen;
   }
   window.closeSettingsPage = function(){ goHome(); };
+
+  function getThemeHomeIcon(){
+    const currentTheme = state.settings?.theme || 'default';
+    const map = {
+      default: '🏠',
+      doctor: '🏥',
+      desert: '⛺',
+      pirates: '🚢',
+      castle: '🏰',
+      space: '🌍',
+      lab: '🏪'
+    };
+    return map[currentTheme] || '🏠';
+  }
+
+  function getHomeButtonText(){
+    return `${getThemeHomeIcon()} Home`;
+  }
+
+  function ensureGlobalHomeButtons(){
+    document.querySelectorAll('.screen').forEach(screen => {
+      if(!screen || screen.id === 'home-screen' || screen.id === 'settings-screen') return;
+
+      if(screen.id === 'exam-screen'){
+        const header = screen.querySelector('.exam-header');
+        if(!header) return;
+
+        let btn = header.querySelector('.btn-home-global');
+        if(!btn){
+          btn = document.createElement('button');
+          btn.className = 'btn-secondary btn-home-global';
+          btn.style.marginInlineStart = 'auto';
+          const right = header.querySelector('.exam-header-right');
+          if(right) header.insertBefore(btn, right);
+          else header.appendChild(btn);
+        }
+
+        btn.textContent = getHomeButtonText();
+        btn.onclick = goHome;
+        return;
+      }
+
+      const header = screen.querySelector('.screen-header');
+      if(!header) return;
+
+      let btn = header.querySelector('.btn-home-global');
+      if(!btn){
+        btn = document.createElement('button');
+        btn.className = 'btn-secondary btn-home-global';
+        btn.style.marginInlineStart = 'auto';
+        header.appendChild(btn);
+      }
+
+      btn.textContent = getHomeButtonText();
+      btn.onclick = goHome;
+    });
+  }
+
   toggleSettings = function(){
+    if(el('settings-screen') && el('settings-screen').classList.contains('active')){
+      goHome();
+      return;
+    }
     ensureSettingsScreen();
     const panel = el('settings-panel');
     if(panel) panel.classList.add('visible');
@@ -832,5 +896,6 @@
     if(state.statsExclusions && state.statsExclusions.excludedSections) state.statsExclusions.excludedSections.years = false;
     ensureSelectionBulkToolbar();
     ensureSettingsScreen();
+    ensureGlobalHomeButtons();
   });
 })();
