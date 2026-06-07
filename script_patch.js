@@ -555,7 +555,7 @@
   function getVisibleSubjectGroups(subject){
     const settings = getSubjectVisibilitySettings(subject.id);
     const lectureGroups = (!isSectionExcluded('lecture') && settings.lectures !== false) ? (subject.lectures || []) : [];
-    const yearGroups = (!isSectionExcluded('year') && settings.years !== false) ? (subject.years || []) : [];
+    const yearGroups = (!isSectionExcluded('lecture') && !isSectionExcluded('year') && settings.years !== false) ? (subject.years || []) : [];
     const aiGroups = (!isSectionExcluded('ai') && settings.ai !== false) ? (subject.ai || []) : [];
     return [].concat(lectureGroups, yearGroups, aiGroups);
   }
@@ -606,7 +606,7 @@
       </div>`;
     const sections = [];
     if((subject.lectures||[]).length && !isSectionExcluded('lecture') && settings.lectures !== false) sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
-    if((subject.years||[]).length && !isSectionExcluded('year') && settings.years !== false) sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
+    if((subject.years||[]).length && !isSectionExcluded('lecture') && !isSectionExcluded('year') && settings.years !== false) sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
     if((subject.ai||[]).length && !isSectionExcluded('ai') && settings.ai !== false) sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الاصطناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
     if(el('subject-stats-sections')) el('subject-stats-sections').innerHTML = sections.length ? sections.join('') : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حالياً.</p></div>';
   };
@@ -643,6 +643,8 @@
     const sectionType = normalizeSectionType(meta?.sectionType || groups?.[0]?.type);
     const ordered = shouldEnhanceSelectionScreen() ? ensureGroupOrder(groups || [], sectionType, subjectName) : (groups || []);
     if(__origShowSelectionScreen) __origShowSelectionScreen(ordered, title, meta);
+    const toolbar = ensureSelectionBulkToolbar();
+    if(toolbar) toolbar.classList.toggle('hidden', !shouldEnhanceSelectionScreen());
     if(shouldEnhanceSelectionScreen()) renderSelectionScreenWithEnhancements();
   };
 
@@ -780,6 +782,8 @@
   .selection-bulk-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
   [data-theme="pirates"] .app-subtitle{color:#f7f0d7}
   [data-theme="pirates"] .exam-progress-badge{color:#fff7e3;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18)}
+  #section-exclusions-list{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+  #section-exclusions-list label{display:flex;align-items:center;gap:10px;width:100%}
   @media (orientation:portrait) and (max-width:1180px){#exams-hint-bar{display:none!important}}
   `;
   document.head.appendChild(st);
