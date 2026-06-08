@@ -773,7 +773,7 @@
     ensureGlobalHomeButtons();
   };
 
-  /* Intercept showScreen for incomplete exams check before entering a new exam */
+    /* Intercept showScreen for incomplete exams check before entering a new exam */
   const __origShowScreen = typeof showScreen === 'function' ? showScreen : null;
   showScreen = function(screenId){
     if(screenId === 'exam-screen' && localStorage.getItem('medical-app-incomplete-exam') && !state.isResumingIncompleteExam){
@@ -782,7 +782,7 @@
         message: '<div>يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟</div>',
         showCancel: true,
         confirmText: 'نعم أريد إكمال الامتحان',
-        cancelText: 'لا (ستفقد بيانات التقدم لهذا الامتحان)',
+        cancelText: 'لا (ستفقد بيانات التقدم لذاك الامتحان)',
         onConfirm: () => {
           try {
             const saved = JSON.parse(localStorage.getItem('medical-app-incomplete-exam'));
@@ -799,6 +799,17 @@
           localStorage.removeItem('medical-app-incomplete-exam');
           if(__origShowScreen) __origShowScreen(screenId);
         },
+        onCancel: () => {
+          localStorage.removeItem('medical-app-incomplete-exam');
+          if(__origShowScreen) __origShowScreen(screenId);
+          if(typeof renderExam === 'function') renderExam();
+        }
+      });
+      return;
+    }
+    if(__origShowScreen) __origShowScreen(screenId);
+  };
+
         onCancel: () => {
           localStorage.removeItem('medical-app-incomplete-exam');
           if(__origShowScreen) __origShowScreen(screenId);
@@ -915,7 +926,7 @@
           message: '<div>يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟</div>',
           showCancel: true,
           confirmText: 'نعم أريد إكمال الامتحان',
-          cancelText: 'لا (ستفقد بيانات التقدم لهذا الامتحان)',
+          cancelText: 'لا (ستفقد بيانات التقدم لذاك الامتحان)',
           onConfirm: () => {
             try {
               const saved = JSON.parse(localStorage.getItem('medical-app-incomplete-exam'));
@@ -953,31 +964,38 @@
             title: 'خروج من الامتحان',
             message: '<div>هل أنت متأكد من رغبتك بالخروج من الامتحان؟</div>',
             showCancel: true,
-            confirmText: 'نعم وعدم حفظ التقدم',
-            cancelText: 'عدم الخروج',
+            confirmText: 'نعم وحفظ التقدم',
+            cancelText: 'نعم وعدم حفظ التقدم',
             onConfirm: () => {
-              localStorage.removeItem('medical-app-incomplete-exam');
-              if(typeof goHome === 'function') goHome();
-              else if(typeof showScreen === 'function') showScreen('home-screen');
-            },
-            onCancel: () => {}
-          });
-
-          setTimeout(() => {
-            const actions = document.querySelector('#dialog-overlay .dialog-actions');
-            if(!actions) return;
-            const saveBtn = document.createElement('button');
-            saveBtn.className = 'btn-primary dialog-extra-btn';
-            saveBtn.textContent = 'نعم وحفظ التقدم';
-            saveBtn.onclick = function(){
-              hideDialog();
               if(state.currentExam) {
                 localStorage.setItem('medical-app-incomplete-exam', JSON.stringify(state.currentExam));
               }
               if(typeof goHome === 'function') goHome();
               else if(typeof showScreen === 'function') showScreen('home-screen');
+            },
+            onCancel: () => {
+              localStorage.removeItem('medical-app-incomplete-exam');
+              if(typeof goHome === 'function') goHome();
+              else if(typeof showScreen === 'function') showScreen('home-screen');
+            }
+          });
+
+          setTimeout(() => {
+            const actions = document.querySelector('#dialog-overlay .dialog-actions');
+            if(!actions) return;
+
+            const confirmBtn = Array.from(actions.querySelectorAll('button')).find(b => b.textContent.includes('نعم وحفظ التقدم'));
+            if(confirmBtn) {
+              confirmBtn.style.setProperty('background', 'color-mix(in srgb, var(--primary, #2563eb) 50%, var(--text-light, #4f6179) 50%)', 'important');
+            }
+
+            const exitBtn = document.createElement('button');
+            exitBtn.className = 'btn-primary dialog-extra-btn';
+            exitBtn.textContent = 'عدم الخروج';
+            exitBtn.onclick = function(){
+              hideDialog();
             };
-            actions.appendChild(saveBtn);
+            actions.appendChild(exitBtn);
           }, 0);
         }
       }
