@@ -1,3 +1,5 @@
+[file name]: script.js
+[file content begin]
 const state = {
   subjects: [], displayedSubjects: [], allQuestions: [], currentSubject: null, currentSelectionMeta: null,
   currentGroups: [], selectedGroups: [], selectedMode: null, selectedDirection: null, extraTime: 0, extraTimeAdded: false,
@@ -540,7 +542,42 @@ function updateSelectionFooter(){ const footer=el('selection-footer'); const tot
 function selectMode(mode){ state.selectedMode=mode; state.selectedDirection=null; state.extraTime=0; state.extraTimeAdded=false; document.querySelectorAll('.btn-mode').forEach(btn=>btn.classList.remove('active')); el(mode==='training'?'btn-training-mode':'btn-exam-mode').classList.add('active'); document.querySelectorAll('.btn-direction').forEach(btn=>btn.classList.remove('active')); el('direction-selection').classList.remove('hidden'); el('timer-options').classList.add('hidden'); el('start-section').classList.add('hidden'); }
 function selectDirection(direction){ state.selectedDirection=direction; document.querySelectorAll('.btn-direction').forEach(btn=>btn.classList.remove('active')); el(direction==='oneway'?'btn-oneway':'btn-twoway').classList.add('active'); if(state.selectedMode==='exam'){ const count=parseInt(el('question-count-input').value,10)||0; el('base-time-display').textContent=count+' min'; el('extra-time-display').textContent='+0 min'; el('total-time-display').textContent=count+' min'; el('timer-options').classList.remove('hidden'); const btn=el('btn-add-extra'); btn.disabled=false; btn.textContent='+ إضافة 5 دقائق'; btn.classList.remove('active'); state.extraTime=0; state.extraTimeAdded=false; } else el('timer-options').classList.add('hidden'); el('start-section').classList.remove('hidden'); }
 function addExtraTime(){ const count=parseInt(el('question-count-input').value,10)||0; const btn=el('btn-add-extra'); if(!state.extraTimeAdded){ state.extraTime=5; state.extraTimeAdded=true; el('extra-time-display').textContent='+5 min'; el('total-time-display').textContent=(count+5)+' min'; btn.disabled=false; btn.textContent='− إزالة 5 دقائق'; btn.classList.add('active'); } else { state.extraTime=0; state.extraTimeAdded=false; el('extra-time-display').textContent='+0 min'; el('total-time-display').textContent=count+' min'; btn.disabled=false; btn.textContent='+ إضافة 5 دقائق'; btn.classList.remove('active'); } }
-function confirmStartExam(){ try{ if(!state.selectedMode || !state.selectedDirection){ showToast('يرجى اختيار النمط واتجاه التنقل.','error'); return; } const count=parseInt(el('question-count-input').value,10); if(!count || count<1){ showToast('يرجى إدخال عدد صحيح من الأسئلة.','error'); return; } let questions=[]; state.selectedGroups.forEach(idx=>{ if(state.currentGroups[idx] && Array.isArray(state.currentGroups[idx].questions)) questions=questions.concat(state.currentGroups[idx].questions); }); if(!questions.length){ showToast('لا توجد أسئلة متاحة للبدء.','error'); return; } const selectedGroupObjects=state.selectedGroups.map(idx=>state.currentGroups[idx]).filter(Boolean); const historySubjectName=selectedGroupObjects[0]?.subjectName || state.currentSubject?.name || 'Unknown Subject'; const historyGroups=selectedGroupObjects.map(g=>({ name:g.name, type:g.type || state.currentSelectionMeta?.sectionType || 'lecture' })); const randomizedQuestions = shuffleArray(questions).slice(0, count).map(prepareQuestionForExam); startExamSession(randomizedQuestions, state.selectedMode, state.selectedDirection, state.currentSelectionMeta ? state.currentSelectionMeta.sectionType : 'custom', state.extraTime, { collectionType: state.currentSelectionMeta ? state.currentSelectionMeta.collectionType : null, displayLabel: state.currentSelectionMeta ? state.currentSelectionMeta.displayLabel : 'Exam', historySubjectName, historyGroups }); }catch(err){ console.error('confirmStartExam error', err); showToast('حدث خطأ عند بدء الامتحان. افتح Console إن استمرت المشكلة.','error'); } }
+function confirmStartExam() {
+  // التحقق من وجود امتحان محفوظ غير مكتمل
+  const savedRaw = localStorage.getItem(STORAGE_KEYS.examState);
+  if (savedRaw && !state.currentExam) {
+    try {
+      const savedExam = JSON.parse(savedRaw);
+      if (savedExam && !savedExam.submitted && savedExam.questions && savedExam.questions.length) {
+        showDialog({
+          title: 'استئناف الامتحان',
+          message: 'يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟',
+          showCancel: true,
+          confirmText: 'نعم أريد إكمال الامتحان',
+          cancelText: 'لا',
+          onConfirm: () => {
+            // استئناف الامتحان المحفوظ
+            state.currentExam = savedExam;
+            showScreen('exam-screen');
+            renderExam();
+            if (state.currentExam.mode === 'exam') startTimer();
+            hideDialog();
+          },
+          onCancel: () => {
+            // تجاهل الامتحان المحفوظ وبدء امتحان جديد
+            clearExamState();
+            proceedToStartNewExam();
+          }
+        });
+        return;
+      }
+    } catch(e) { clearExamState(); }
+  }
+  proceedToStartNewExam();
+}
+
+function proceedToStartNewExam() {
+  try{ if(!state.selectedMode || !state.selectedDirection){ showToast('يرجى اختيار النمط واتجاه التنقل.','error'); return; } const count=parseInt(el('question-count-input').value,10); if(!count || count<1){ showToast('يرجى إدخال عدد صحيح من الأسئلة.','error'); return; } let questions=[]; state.selectedGroups.forEach(idx=>{ if(state.currentGroups[idx] && Array.isArray(state.currentGroups[idx].questions)) questions=questions.concat(state.currentGroups[idx].questions); }); if(!questions.length){ showToast('لا توجد أسئلة متاحة للبدء.','error'); return; } const selectedGroupObjects=state.selectedGroups.map(idx=>state.currentGroups[idx]).filter(Boolean); const historySubjectName=selectedGroupObjects[0]?.subjectName || state.currentSubject?.name || 'Unknown Subject'; const historyGroups=selectedGroupObjects.map(g=>({ name:g.name, type:g.type || state.currentSelectionMeta?.sectionType || 'lecture' })); const randomizedQuestions = shuffleArray(questions).slice(0, count).map(prepareQuestionForExam); startExamSession(randomizedQuestions, state.selectedMode, state.selectedDirection, state.currentSelectionMeta ? state.currentSelectionMeta.sectionType : 'custom', state.extraTime, { collectionType: state.currentSelectionMeta ? state.currentSelectionMeta.collectionType : null, displayLabel: state.currentSelectionMeta ? state.currentSelectionMeta.displayLabel : 'Exam', historySubjectName, historyGroups }); }catch(err){ console.error('confirmStartExam error', err); showToast('حدث خطأ عند بدء الامتحان. افتح Console إن استمرت المشكلة.','error'); } }
 function prepareQuestionForExam(question){
   const clone = JSON.parse(JSON.stringify(question));
   const baseOptions = (clone.options || []).map(opt => stripOptionPrefix(opt));
@@ -567,7 +604,7 @@ function renderRemoveWrongBtn(){ if(!state.currentExam || state.currentExam.coll
 function startSpecialExam(questions, mode, direction){ startExamSession(shuffleArray(questions.slice()).map(prepareQuestionForExam), mode, direction||'twoway', 'special', 5, { collectionType:null, displayLabel:'Special Exam', historySubjectName:'Special Exam', historyGroups:[] }); }
 
 function renderOptionButton(opt, i, idx, showAnswerState, selectedIndex, correctIdx){ let cls='option-btn'; if(selectedIndex===i) cls+=' selected'; if(showAnswerState){ if(i===correctIdx) cls+=' correct'; else if(selectedIndex===i && i!==correctIdx) cls+=' wrong'; } return `<button class="${cls}" onclick="selectOption(${i})"><span class="option-label">${LETTERS[i]})</span>${escapeHtml(cleanOptionDisplay(opt))}</button>`; }
-function renderExam(){ if(!state.currentExam) return; const t=theme(); const questions=state.currentExam.questions; const idx=state.currentExam.currentIndex; const q=questions[idx]; if(!q) return; let progressText=t.icons.progress+' '+(idx+1)+'/'+questions.length; if(state.currentExam.mode==='training'){ const answered=state.currentExam.firstAnswers.filter(x=>x!==null).length; const correct=state.currentExam.firstAnswers.filter((ans,i)=>ans!==null && isAnswerCorrect(questions[i],ans)).length; const pct=answered>0 ? Math.round((correct/answered)*100) : 0; progressText+=' · '+t.icons.success+correct+' · '+pct+'%'; } else progressText+=' · '+(questions.length-idx)+' left'; el('exam-progress').textContent=progressText; renderGrid(); const correctIdx=getCorrectIndex(q); const showAnswerState=state.currentExam.mode==='training' && state.currentExam.showAnswer; const fav=state.favorites.includes(q.id); const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswer(q))}</span></div>` : ''; el('question-container').innerHTML=`<div class="question-header"><span class="question-number">Q${escapeHtml(q.number||String(idx+1))}</span><div class="question-actions"><button class="icon-btn ${fav?'active':''}" onclick="toggleFavorite('${q.id}')">💚</button><button class="icon-btn" onclick="toggleQuestionLocation()">${t.icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${renderRemoveWrongBtn()}`; el('question-container').classList.add('exam-content-ltr'); renderExamNav(); }
+function renderExam(){ if(!state.currentExam) return; const t=theme(); const questions=state.currentExam.questions; const idx=state.currentExam.currentIndex; const q=questions[idx]; if(!q) return; let progressText=t.icons.progress+' '+(idx+1)+'/'+questions.length; if(state.currentExam.mode==='training'){ const answered=state.currentExam.firstAnswers.filter(x=>x!==null).length; const correct=state.currentExam.firstAnswers.filter((ans,i)=>ans!==null && isAnswerCorrect(questions[i],ans)).length; const pct=answered>0 ? Math.round((correct/answered)*100) : 0; progressText+=' · '+t.icons.success+correct+' · '+pct+'%'; } else progressText+=' · '+(questions.length-idx)+' left'; el('exam-progress').textContent=progressText; renderGrid(); const correctIdx=getCorrectIndex(q); const showAnswerState=state.currentExam.mode==='training' && state.currentExam.showAnswer; const fav=state.favorites.includes(q.id); const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswer(q))}</span></div>` : ''; el('question-container').innerHTML=`<div class="question-header"><span class="question-number">Q${idx+1}</span><div class="question-actions"><button class="icon-btn ${fav?'active':''}" onclick="toggleFavorite('${q.id}')">💚</button><button class="icon-btn" onclick="toggleQuestionLocation()">${t.icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${renderRemoveWrongBtn()}`; el('question-container').classList.add('exam-content-ltr'); renderExamNav(); }
 function renderGrid(){ if(!state.currentExam) return; const grid=el('question-grid'); grid.innerHTML=''; state.currentExam.questions.forEach((q,idx)=>{ let cls='grid-btn'; if(idx===state.currentExam.currentIndex) cls+=' current'; else if(state.currentExam.answers[idx]!==null){ if(state.currentExam.mode==='training' && state.currentExam.firstAnswers[idx]!==null) cls+=isAnswerCorrect(q,state.currentExam.firstAnswers[idx])?' answered':' wrong'; else cls+=' answered'; } if(state.currentExam.direction==='oneway' && idx<state.currentExam.currentIndex) cls+=' disabled'; const btn=document.createElement('button'); btn.className=cls; btn.textContent=String(idx+1); btn.onclick=()=>navigateToQuestion(idx); grid.appendChild(btn); }); }
 function renderExamNav(){ if(!state.currentExam) return; const nav=el('exam-nav'); const idx=state.currentExam.currentIndex, last=state.currentExam.questions.length-1; let prevBtn='<span></span>', nextBtn='<span></span>'; if(state.currentExam.direction==='twoway' && idx>0) prevBtn='<button class="btn-secondary" onclick="prevQuestion()">Previous ←</button>'; if(state.currentExam.mode==='training'){ if(state.currentExam.showAnswer) nextBtn=idx<last?'<button class="btn-primary" onclick="nextQuestion()">Next →</button>':'<button class="btn-primary" onclick="finishExam()">Finish</button>'; else if(state.currentExam.answers[idx]!==null) nextBtn='<button class="btn-small" onclick="showAnswer()">Show Answer</button>'; } else if(state.currentExam.answers[idx]!==null) nextBtn=idx<last?'<button class="btn-primary" onclick="nextQuestion()">Next →</button>':'<button class="btn-primary" onclick="finishExam()">Finish</button>'; nav.innerHTML=prevBtn + nextBtn; }
 function selectOption(optionIndex){ if(!state.currentExam || state.currentExam.submitted) return; if(state.currentExam.mode==='training' && state.currentExam.showAnswer) return; const idx=state.currentExam.currentIndex; const q=state.currentExam.questions[idx]; state.currentExam.answers[idx]=optionIndex; if(state.currentExam.firstAnswers[idx]===null) state.currentExam.firstAnswers[idx]=optionIndex; const correct=isAnswerCorrect(q,optionIndex); if(state.currentExam.mode==='training'){ if(state.settings.feedbackEnabled) playEffectSound(correct?'right':'wrong'); if(correct){ state.currentExam.showAnswer=true; if(state.settings.animations!==false) showFireworks(48,12); } else { if(!state.wrongQuestions.includes(q.id)){ state.wrongQuestions.push(q.id); saveWrongQuestions(); } showToast(themeWrongMessage(),'error'); } saveExamState(); renderExam(); } else { saveExamState(); renderExam(); } }
@@ -577,12 +614,70 @@ function nextQuestion(){ if(!state.currentExam) return; if(state.currentExam.cur
 function prevQuestion(){ if(!state.currentExam || state.currentExam.direction!=='twoway') return; if(state.currentExam.currentIndex>0){ state.currentExam.currentIndex-=1; if(state.currentExam.mode==='training') state.currentExam.showAnswer=state.currentExam.answers[state.currentExam.currentIndex]!==null; saveExamState(); renderExam(); scrollQuestionIntoView(true); } }
 function navigateToQuestion(index){ if(!state.currentExam) return; if(state.currentExam.direction==='oneway' && index!==state.currentExam.currentIndex) return; state.currentExam.currentIndex=index; if(state.currentExam.mode==='training') state.currentExam.showAnswer=state.currentExam.answers[index]!==null; saveExamState(); renderExam(); scrollQuestionIntoView(true); }
 function scrollQuestionIntoView(smooth){ const q=el('question-container'); if(!q) return; const top=q.getBoundingClientRect().top + window.scrollY - 12; window.scrollTo({top, behavior:smooth && state.settings.animations!==false ? 'smooth':'auto'}); }
-function toggleQuestionLocation(){ if(!state.currentExam) return; const q=state.currentExam.questions[state.currentExam.currentIndex]; const parts=[]; if(q.subjectName) parts.push('المادة: '+q.subjectName); if(q.lectureName) parts.push('الملف: '+q.lectureName); if(q.batchName) parts.push('الدفعة: '+q.batchName); if(q.pageNumber) parts.push('الصفحة: '+q.pageNumber); showToast(parts.join(' | ') || 'لا توجد بيانات موقع متاحة.','info',3000); }
+function toggleQuestionLocation(){ if(!state.currentExam) return; const q=state.currentExam.questions[state.currentExam.currentIndex]; const parts=[]; if(q.subjectName) parts.push('المادة: '+q.subjectName); if(q.lectureName) parts.push('الملف: '+q.lectureName); if(q.batchName) parts.push('الدفعة: '+q.batchName); if(q.pageNumber) parts.push('الصفحة: '+q.pageNumber); if(q.number) parts.push('رقم السؤال الأصلي: '+q.number); showToast(parts.join(' | ') || 'لا توجد بيانات موقع متاحة.','info',3000); }
 function confirmRemoveCurrentWrong(){ if(!state.currentExam || state.currentExam.collectionType!=='wrong') return; const q=state.currentExam.questions[state.currentExam.currentIndex]; askConfirm('هل أتقنت هذا السؤال وتريد إزالته من الأسئلة الخاطئة؟', ()=>removeWrongQuestionsByIds([q.id])); }
 function removeWrongQuestionsByIds(ids){ const set=new Set(ids); state.wrongQuestions = state.wrongQuestions.filter(id=>!set.has(id)); saveWrongQuestions(); updateStatisticsIfOpen(); if(state.currentExam){ state.currentExam.masteredWrongIds = state.currentExam.masteredWrongIds.filter(id=>!set.has(id)); renderExam(); } if(state.browseMode==='wrong') renderSubjects(); showToast('تمت إزالة السؤال/الأسئلة من قائمة الأخطاء.','success'); }
 function toggleGrid(){ const grid=el('question-grid'); const btn=el('btn-grid-toggle'); grid.classList.toggle('hidden'); btn.innerHTML=grid.classList.contains('hidden')?'<span>☰</span> إظهار الشبكة':'<span>☰</span> إخفاء الشبكة'; }
-function exitExam(){ if(state.currentExam && !state.currentExam.submitted) askConfirm('هل تريد الخروج؟ سيتم حفظ التقدم الحالي.', ()=>{ saveExamState(); state.currentExam=null; clearInterval(state.timerInterval); state.timerInterval=null; goHome(); }); else { state.currentExam=null; goHome(); } }
+function exitExam() {
+  if (!state.currentExam) return goHome();
 
+  // إنشاء حوار مخصص بثلاثة أزرار
+  const overlay = el('dialog-overlay');
+  const titleEl = el('dialog-title');
+  const bodyEl = el('dialog-body');
+  const confirmBtn = el('dialog-confirm');
+  const cancelBtn = el('dialog-cancel');
+
+  // إعداد النصوص
+  titleEl.textContent = 'تأكيد الخروج من الامتحان';
+  bodyEl.innerHTML = '<p>هل أنت متأكد من رغبتك بالخروج من الامتحان؟</p>';
+  confirmBtn.textContent = 'نعم وعدم حفظ التقدم';
+  cancelBtn.textContent = 'عدم الخروج';
+
+  // إنشاء زر "نعم وحفظ التقدم" إذا لم يكن موجوداً
+  let saveBtn = document.getElementById('dialog-save-exit');
+  if (!saveBtn) {
+    saveBtn = document.createElement('button');
+    saveBtn.id = 'dialog-save-exit';
+    saveBtn.className = 'btn-primary dialog-extra-btn';
+    const actionsDiv = document.querySelector('#dialog-overlay .dialog-actions');
+    actionsDiv.insertBefore(saveBtn, confirmBtn);
+  }
+  saveBtn.textContent = 'نعم وحفظ التقدم';
+  saveBtn.style.marginInlineEnd = 'auto';
+
+  // إزالة المستمعات القديمة
+  const newConfirmHandler = () => {
+    // الخيار 1: خروج بدون حفظ
+    clearExamState();
+    state.currentExam = null;
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+    goHome();
+    hideDialog();
+  };
+  const newCancelHandler = () => {
+    // الخيار 3: عدم الخروج
+    hideDialog();
+  };
+  const newSaveHandler = () => {
+    // الخيار 2: حفظ التقدم ثم الخروج
+    saveExamState();
+    state.currentExam = null;
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+    goHome();
+    hideDialog();
+  };
+
+  // إعادة تعيين المستمعات
+  confirmBtn.onclick = () => { newConfirmHandler(); };
+  cancelBtn.onclick = () => { newCancelHandler(); };
+  saveBtn.onclick = () => { newSaveHandler(); };
+
+  // إظهار الحوار
+  overlay.classList.remove('hidden');
+}
 function startTimer(){ clearInterval(state.timerInterval); const timerEl=el('exam-timer'); timerEl.classList.remove('hidden'); state.timerInterval=setInterval(()=>{ if(!state.currentExam || state.currentExam.submitted){ clearInterval(state.timerInterval); state.timerInterval=null; return; } const elapsed=Date.now()-state.currentExam.startTime; const remaining=state.currentExam.totalTime-elapsed; if(remaining<=0){ clearInterval(state.timerInterval); state.timerInterval=null; timeUp(); return; } const mins=Math.floor(remaining/60000); const secs=Math.floor((remaining%60000)/1000); timerEl.textContent=mins+':'+String(secs).padStart(2,'0'); timerEl.classList.toggle('timer-danger', remaining<=60000); },1000); }
 function timeUp(){ if(!state.currentExam) return; const unanswered=state.currentExam.answers.filter(a=>a===null).length; showToast('انتهى الوقت! يوجد '+unanswered+' سؤالًا بدون إجابة.','error'); finishExam(); }
 function recordExamMemory(){ if(!state.currentExam) return; const end = state.currentExam.endTime || Date.now(); const start = state.currentExam.startTime || end; const answers = state.currentExam.mode==='exam' ? state.currentExam.answers : state.currentExam.firstAnswers; state.currentExam.questions.forEach((q,idx)=>{ if(answers[idx]===null) return; if(!state.questionsFirstSeen[q.id]) state.questionsFirstSeen[q.id] = { ts:end, subjectName:q.subjectName || 'Unknown' }; }); const stats = calculateScore(state.currentExam); const mastered = [];
