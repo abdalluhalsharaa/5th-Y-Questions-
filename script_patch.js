@@ -810,6 +810,59 @@
     }
   }
 
+  /* دالة لإعداد الشعارات ديناميكياً (تمت إضافتها فقط دون المساس بأي شيء آخر) */
+  async function setupDynamicLogos() {
+    const container = document.getElementById('dynamic-logos-container');
+    if (!container) return;
+
+    const logos = [
+      { name: 'logo2', file: 'logo2.jpg', position: 'right' },
+      { name: 'logo', file: 'logo.jpg', position: 'center' },
+      { name: 'logo3', file: 'logo3.jpg', position: 'left' }
+    ];
+
+    const imageExists = (src) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = src;
+      });
+    };
+
+    const existence = await Promise.all(logos.map(logo => imageExists(logo.file)));
+    const availableLogos = logos.filter((_, index) => existence[index]);
+
+    if (availableLogos.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    let finalOrder = [];
+    const hasLogo = existence[1];
+    const hasLogo2 = existence[0];
+    const hasLogo3 = existence[2];
+
+    if (hasLogo && !hasLogo2 && !hasLogo3) {
+      finalOrder = [logos[1]];
+    } else if (hasLogo && hasLogo2 && !hasLogo3) {
+      finalOrder = [logos[1], logos[0]];
+    } else if (hasLogo && hasLogo2 && hasLogo3) {
+      finalOrder = [logos[0], logos[1], logos[2]];
+    } else {
+      finalOrder = availableLogos;
+    }
+
+    container.innerHTML = '';
+    finalOrder.forEach(logo => {
+      const img = document.createElement('img');
+      img.src = logo.file;
+      img.alt = `Logo ${logo.name}`;
+      img.className = 'dynamic-logo';
+      container.appendChild(img);
+    });
+  }
+
   /* patch styles kept from previous patch and aligned with current files */
   const st = document.createElement('style');
   st.id = 'medical-app-patch-v5-style';
@@ -866,6 +919,7 @@
     ensureSettingsScreen();
     ensureGlobalHomeButtons();
     hookExamAudioTogglesForIOS();
+    setupDynamicLogos(); // استدعاء دالة إعداد الشعارات ديناميكياً
 
     /* watch for exam settings modal being opened later too */
     document.addEventListener('click', function(ev){
