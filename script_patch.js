@@ -769,11 +769,49 @@
     if(__origShowSelectionScreen) __origShowSelectionScreen(ordered, title, meta);
     const toolbar = ensureSelectionBulkToolbar();
     if(toolbar) toolbar.classList.toggle('hidden', !shouldEnhanceSelectionScreen());
-    if(shouldEnhanceSelectionScreen()) renderSelectionScreenWithEnhancements();
+        if(shouldEnhanceSelectionScreen()) renderSelectionScreenWithEnhancements();
     ensureGlobalHomeButtons();
   };
 
+  /* Intercept showScreen for incomplete exams check before entering a new exam */
+  const __origShowScreen = typeof showScreen === 'function' ? showScreen : null;
+  showScreen = function(screenId){
+    if(screenId === 'exam-screen' && localStorage.getItem('medical-app-incomplete-exam') && !state.isResumingIncompleteExam){
+      showDialog({
+        title: 'امتحان غير مكتمل',
+        message: '<div>يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟</div>',
+        showCancel: true,
+        confirmText: 'نعم أريد إكمال الامتحان',
+        cancelText: 'لا (ستفقد بيانات التقدم لهذا الامتحان)',
+        onConfirm: () => {
+          try {
+            const saved = JSON.parse(localStorage.getItem('medical-app-incomplete-exam'));
+            if(saved) {
+              state.currentExam = saved;
+              localStorage.removeItem('medical-app-incomplete-exam');
+              state.isResumingIncompleteExam = true;
+              if(__origShowScreen) __origShowScreen('exam-screen');
+              if(typeof renderExam === 'function') renderExam();
+              state.isResumingIncompleteExam = false;
+              return;
+            }
+          } catch(e){}
+          localStorage.removeItem('medical-app-incomplete-exam');
+          if(__origShowScreen) __origShowScreen(screenId);
+        },
+        onCancel: () => {
+          localStorage.removeItem('medical-app-incomplete-exam');
+          if(__origShowScreen) __origShowScreen(screenId);
+          if(typeof renderExam === 'function') renderExam();
+        }
+      });
+      return;
+    }
+    if(__origShowScreen) __origShowScreen(screenId);
+  };
+
   /* iOS exam toggles: reinforce immediate user-gesture behavior inside exam */
+
   function hookExamAudioTogglesForIOS(){
     const bgExam = el('exam-bg-sound-enabled-toggle');
     const feedbackExam = el('exam-feedback-toggle');
@@ -810,59 +848,6 @@
     }
   }
 
-  /* دالة لإعداد الشعارات ديناميكياً (تمت إضافتها فقط دون المساس بأي شيء آخر) */
-  async function setupDynamicLogos() {
-    const container = document.getElementById('dynamic-logos-container');
-    if (!container) return;
-
-    const logos = [
-      { name: 'logo2', file: 'logo2.jpg', position: 'right' },
-      { name: 'logo', file: 'logo.jpg', position: 'center' },
-      { name: 'logo3', file: 'logo3.jpg', position: 'left' }
-    ];
-
-    const imageExists = (src) => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-        img.src = src;
-      });
-    };
-
-    const existence = await Promise.all(logos.map(logo => imageExists(logo.file)));
-    const availableLogos = logos.filter((_, index) => existence[index]);
-
-    if (availableLogos.length === 0) {
-      container.innerHTML = '';
-      return;
-    }
-
-    let finalOrder = [];
-    const hasLogo = existence[1];
-    const hasLogo2 = existence[0];
-    const hasLogo3 = existence[2];
-
-    if (hasLogo && !hasLogo2 && !hasLogo3) {
-      finalOrder = [logos[1]];
-    } else if (hasLogo && hasLogo2 && !hasLogo3) {
-      finalOrder = [logos[1], logos[0]];
-    } else if (hasLogo && hasLogo2 && hasLogo3) {
-      finalOrder = [logos[0], logos[1], logos[2]];
-    } else {
-      finalOrder = availableLogos;
-    }
-
-    container.innerHTML = '';
-    finalOrder.forEach(logo => {
-      const img = document.createElement('img');
-      img.src = logo.file;
-      img.alt = `Logo ${logo.name}`;
-      img.className = 'dynamic-logo';
-      container.appendChild(img);
-    });
-  }
-
   /* patch styles kept from previous patch and aligned with current files */
   const st = document.createElement('style');
   st.id = 'medical-app-patch-v5-style';
@@ -893,11 +878,13 @@
   [data-theme="pirates"] .exam-progress-badge{color:#fff7e3;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18)}
   #section-exclusions-list{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
   #section-exclusions-list label{display:flex;align-items:center;gap:10px;width:100%}
-  .subject-actions{display:none!important}
+    .subject-actions{display:none!important}
   .subject-card.actions-open .subject-actions{display:flex!important}
   #exams-hint-bar{display:block!important}
+  #exam-screen .btn-home, #exam-screen .btn-home-global, #exam-screen [class*="home"], #exam-screen [id*="home"] { display: none !important; }
   `;
   document.head.appendChild(st);
+
 
   window.addEventListener('beforeunload', () => {
     try{
@@ -909,7 +896,7 @@
     }catch(e){}
   });
 
-  document.addEventListener('DOMContentLoaded', function(){
+    document.addEventListener('DOMContentLoaded', function(){
     rebuildThemeSelectors();
     try{ if(typeof applySettings === 'function') applySettings(); }catch(e){}
     const yearsInput = el('exclude-years');
@@ -919,10 +906,86 @@
     ensureSettingsScreen();
     ensureGlobalHomeButtons();
     hookExamAudioTogglesForIOS();
-    setupDynamicLogos(); // استدعاء دالة إعداد الشعارات ديناميكياً
+
+    /* Reload check for incomplete exam */
+    setTimeout(() => {
+      if(localStorage.getItem('medical-app-incomplete-exam')){
+        showDialog({
+          title: 'امتحان غير مكتمل',
+          message: '<div>يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟</div>',
+          showCancel: true,
+          confirmText: 'نعم أريد إكمال الامتحان',
+          cancelText: 'لا (ستفقد بيانات التقدم لهذا الامتحان)',
+          onConfirm: () => {
+            try {
+              const saved = JSON.parse(localStorage.getItem('medical-app-incomplete-exam'));
+              if(saved) {
+                state.currentExam = saved;
+                localStorage.removeItem('medical-app-incomplete-exam');
+                state.isResumingIncompleteExam = true;
+                if(typeof showScreen === 'function') showScreen('exam-screen');
+                if(typeof renderExam === 'function') renderExam();
+                state.isResumingIncompleteExam = false;
+              }
+            } catch(e){}
+            localStorage.removeItem('medical-app-incomplete-exam');
+          },
+          onCancel: () => {
+            localStorage.removeItem('medical-app-incomplete-exam');
+          }
+        });
+      }
+    }, 200);
+
+    /* Global click interceptor for Exam Exit button */
+    document.addEventListener('click', function(e){
+      const target = e.target;
+      if(!target) return;
+      if(typeof showScreen === 'function' && el('exam-screen') && el('exam-screen').classList.contains('active')){
+        const text = (target.textContent || '').trim().toLowerCase();
+        if(text.includes('exit') || target.closest('.btn-back') || target.id === 'btn-exit'){
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          
+          removeDialogExtras();
+          showDialog({
+            title: 'خروج من الامتحان',
+            message: '<div>هل أنت متأكد من رغبتك بالخروج من الامتحان؟</div>',
+            showCancel: true,
+            confirmText: 'نعم وعدم حفظ التقدم',
+            cancelText: 'عدم الخروج',
+            onConfirm: () => {
+              localStorage.removeItem('medical-app-incomplete-exam');
+              if(typeof goHome === 'function') goHome();
+              else if(typeof showScreen === 'function') showScreen('home-screen');
+            },
+            onCancel: () => {}
+          });
+
+          setTimeout(() => {
+            const actions = document.querySelector('#dialog-overlay .dialog-actions');
+            if(!actions) return;
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'btn-primary dialog-extra-btn';
+            saveBtn.textContent = 'نعم وحفظ التقدم';
+            saveBtn.onclick = function(){
+              hideDialog();
+              if(state.currentExam) {
+                localStorage.setItem('medical-app-incomplete-exam', JSON.stringify(state.currentExam));
+              }
+              if(typeof goHome === 'function') goHome();
+              else if(typeof showScreen === 'function') showScreen('home-screen');
+            };
+            actions.appendChild(saveBtn);
+          }, 0);
+        }
+      }
+    }, true);
 
     /* watch for exam settings modal being opened later too */
-    document.addEventListener('click', function(ev){
+
+      document.addEventListener('click', function(ev){
       if(ev.target && (ev.target.id === 'btn-exam-settings' || ev.target.closest('#btn-exam-settings'))){
         setTimeout(hookExamAudioTogglesForIOS, 50);
       }
