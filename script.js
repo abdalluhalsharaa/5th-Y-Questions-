@@ -38,7 +38,6 @@ function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); 
   const t=el(id); 
   if(t) t.classList.add('active'); 
-  // تفعيل كلاس النمط عند الدخول لشاشة الامتحان من أجل إخفاء زر الهوم جلوبال
   if (id === 'exam-screen') {
     document.body.classList.add('in-exam-mode');
   } else {
@@ -354,16 +353,12 @@ function renderSelectionList(tab){
   const container = el('selection-list');
   if(!container || !state.currentSubject) return;
   let groups = [];
-  let typeLabel = 'محاضرة';
   if(tab === 'lectures'){
     groups = state.currentSubject.lectures || [];
-    typeLabel = 'محاضرة';
   } else if(tab === 'years'){
     groups = state.currentSubject.years || [];
-    typeLabel = 'سنة';
   } else if(tab === 'ai'){
     groups = state.currentSubject.ai || [];
-    typeLabel = 'تجميعة الذكاء الاصطناعي';
   }
   state.currentGroups = groups;
   if(!groups.length){
@@ -491,7 +486,6 @@ function renderExam(){
       ${isUserCorrect?'إجابة صحيحة أحسنت!':'إجابة خاطئة، حاول التركيز في المرة القادمة.'}
     </div>`;
   }
-  // التعديل الثالث: إسناد رقم السؤال الترتيبي الفعلي لشبكة الأسئلة داخل دالة الرندرة لمنع تداخل أرقام الأسئلة الثابتة القديمة
   container.innerHTML = `
     <div class="question-header">
       <span class="question-number">السؤال ${idx + 1}</span>
@@ -564,7 +558,6 @@ function nextQuestion(){
   }
 }
 
-// التعديل الأول: دمج منطق الـ 3 خيارات الفورية عند الرغبة في الخروج من الامتحان وإغلاق المؤقت بالشكل المخصص
 function exitExam(){
   if(state.currentExam && !state.currentExam.submitted){
     clearInterval(state.timerInterval);
@@ -573,7 +566,6 @@ function exitExam(){
     if(overlay){
       overlay.classList.remove('hidden');
     } else {
-      // احتياط في حال لم يتم العثور على العنصر المرئي لأي سبب
       if(confirm('هل تريد الخروج وحفظ تقدم الامتحان الحالي؟')){
         saveExamState();
       } else {
@@ -588,22 +580,18 @@ function exitExam(){
   }
 }
 
-// التعديل الأول: معالجة خيار المستخدم في نافذة الخروج المخصصة الثلاثية بشكل صارم وصحيح
 function handleExamExitChoice(choice){
   const overlay = el('exam-exit-dialog-overlay');
   if(overlay) overlay.classList.add('hidden');
   if(choice === 1){
-    // نعم وعدم حفظ التقدم
     clearExamState();
     state.currentExam = null;
     goToHome();
   } else if(choice === 2){
-    // نعم وحفظ التقدم
     saveExamState();
     state.currentExam = null;
     goToHome();
   } else if(choice === 3){
-    // عدم الخروج وإكمال الامتحان (استئناف العداد وإكمال العرض)
     startTimer();
   }
 }
@@ -1136,7 +1124,6 @@ function saveStatsExclusions(){
 function openSubjectStatsSettings(){
   if(!state.currentSubject) return;
   const sid = state.currentSubject.id;
-  const settings = getSubjectVisibilitySettings(sid);
   el('sub-settings-goal').value = state.subjectStatsSettings[sid]?.goal || '';
   el('sub-settings-order').value = state.subjectStatsSettings[sid]?.order || 'completion-asc';
   el('subject-stats-settings-modal').classList.remove('hidden');
@@ -1156,7 +1143,6 @@ function applySubjectStatsSettings(){
   showToast('تم حفظ خيارات إحصائيات المادة الحالية.');
 }
 
-// التعديل الأول: دمج شاشة الاستئناف المخصصة عند بدء تشغيل التطبيق لوثوقية العثور على امتحان محفوظ في الـ LocalStorage
 function init(){
   loadSettings();
   loadProgress();
@@ -1171,18 +1157,15 @@ function init(){
   primeAudioUnlock();
   prepareStaticEffectAudio();
   
-  // التحقق من وجود امتحان معلق مخزن في الذاكرة المحلية للجهاز
   const savedExam = localStorage.getItem(STORAGE_KEYS.examState);
   if(savedExam){
     try {
       const parsed = JSON.parse(savedExam);
       if(parsed && parsed.questions && parsed.questions.length > 0){
-        // عرض شاشة الحوار المنبثقة المخصصة للاستئناف في الملف
         const resumeOverlay = el('exam-resume-dialog-overlay');
         if(resumeOverlay){
           resumeOverlay.classList.remove('hidden');
         } else {
-          // استدعاء بديل فوري في حال غياب البنية البصرية لأي سبب
           if(confirm('هل ترغب في استئناف الامتحان السابق المتروك من حيث توقفت؟')){
             state.currentExam = parsed;
             renderExam();
@@ -1205,7 +1188,6 @@ function init(){
   }
 }
 
-// التعديل الأول: معالجة خيار استئناف أو مسح الامتحان المتروك من النافذة البصرية المخصصة
 function handleExamResumeChoice(resume){
   const resumeOverlay = el('exam-resume-dialog-overlay');
   if(resumeOverlay) resumeOverlay.classList.add('hidden');
@@ -1230,10 +1212,8 @@ function handleExamResumeChoice(resume){
   }
 }
 
-// تعيين دالة البداية عند تحميل كامل عناصر النافذة
 window.onload = init;
 
-// إتاحة كافة الدوال عالمياً لضمان ارتباطها بأزرار الـ HTML ومنع الأخطاء البرمجية
 window.el=el; window.changeTheme=changeTheme; window.changeSound=changeSound; window.changeVolume=changeVolume;
 window.toggleDarkMode=toggleDarkMode; window.toggleBackgroundSoundEnabled=toggleBackgroundSoundEnabled;
 window.toggleFeedbackSounds=toggleFeedbackSounds; window.toggleAnimations=toggleAnimations; window.toggleSettings=toggleSettings;
@@ -1245,7 +1225,7 @@ window.switchSelectionTab=switchSelectionTab; window.toggleGroupSelection=toggle
 window.startBrowseFromSelection=startBrowseFromSelection; window.startExamFromSelection=startExamFromSelection;
 window.selectExamOption=selectExamOption; window.prevQuestion=prevQuestion; window.nextQuestion=nextQuestion;
 window.exitExam=exitExam; window.handleExamExitChoice=handleExamExitChoice; window.handleExamResumeChoice=handleExamResumeChoice;
-window.finishExam=finishExam; window.toggleReviewAnswers=toggleReviewAnswers; window.restartExamCurrent;
+window.finishExam=finishExam; window.toggleReviewAnswers=toggleReviewAnswers; window.restartExamCurrent=restartExamCurrent;
 window.toggleFavoriteBrowse=toggleFavoriteBrowse; window.toggleFavoriteExam=toggleFavoriteExam;
 window.toggleResetSubjectsSelection=toggleResetSubjectsSelection; window.showResetConfirmation=showResetConfirmation;
 window.closeResetModal=closeResetModal; window.openResetModal=openResetModal; window.openHistoryDeleteModal=openHistoryDeleteModal;
