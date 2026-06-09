@@ -581,7 +581,32 @@ function toggleQuestionLocation(){ if(!state.currentExam) return; const q=state.
 function confirmRemoveCurrentWrong(){ if(!state.currentExam || state.currentExam.collectionType!=='wrong') return; const q=state.currentExam.questions[state.currentExam.currentIndex]; askConfirm('هل أتقنت هذا السؤال وتريد إزالته من الأسئلة الخاطئة؟', ()=>removeWrongQuestionsByIds([q.id])); }
 function removeWrongQuestionsByIds(ids){ const set=new Set(ids); state.wrongQuestions = state.wrongQuestions.filter(id=>!set.has(id)); saveWrongQuestions(); updateStatisticsIfOpen(); if(state.currentExam){ state.currentExam.masteredWrongIds = state.currentExam.masteredWrongIds.filter(id=>!set.has(id)); renderExam(); } if(state.browseMode==='wrong') renderSubjects(); showToast('تمت إزالة السؤال/الأسئلة من قائمة الأخطاء.','success'); }
 function toggleGrid(){ const grid=el('question-grid'); const btn=el('btn-grid-toggle'); grid.classList.toggle('hidden'); btn.innerHTML=grid.classList.contains('hidden')?'<span>☰</span> إظهار الشبكة':'<span>☰</span> إخفاء الشبكة'; }
-function exitExam(){ if(state.currentExam && !state.currentExam.submitted) askConfirm('هل تريد الخروج؟ سيتم حفظ التقدم الحالي.', ()=>{ saveExamState(); state.currentExam=null; clearInterval(state.timerInterval); state.timerInterval=null; goHome(); }); else { state.currentExam=null; goHome(); } }
+function exitExam(saveProgress) {
+  // التحقق مما إذا كان هناك امتحان جاري ولم يتم تسليمه بعد
+  if (state.currentExam && !state.currentExam.submitted) {
+    if (saveProgress) {
+      // إذا اختار المستخدم حفظ التقدم
+      saveExamState();
+    } else {
+      // إذا اختار عدم حفظ التقدم، نقوم بمسح الذاكرة المؤقتة للامتحان
+      localStorage.removeItem(STORAGE_KEYS.examState);
+    }
+  }
+
+  // إعادة تعيين حالة الامتحان وإيقاف المؤقت الزمني
+  state.currentExam = null;
+  if (state.timerInterval) {
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+
+  // إغلاق نافذة التأكيد المخصصة والعودة للشاشة الرئيسية
+  if (typeof hideDialog === 'function') {
+    hideDialog();
+  }
+  goHome();
+}
+
 
 function startTimer(){ clearInterval(state.timerInterval); const timerEl=el('exam-timer'); timerEl.classList.remove('hidden'); state.timerInterval=setInterval(()=>{ if(!state.currentExam || state.currentExam.submitted){ clearInterval(state.timerInterval); state.timerInterval=null; return; } const elapsed=Date.now()-state.currentExam.startTime; const remaining=state.currentExam.totalTime-elapsed; if(remaining<=0){ clearInterval(state.timerInterval); state.timerInterval=null; timeUp(); return; } const mins=Math.floor(remaining/60000); const secs=Math.floor((remaining%60000)/1000); timerEl.textContent=mins+':'+String(secs).padStart(2,'0'); timerEl.classList.toggle('timer-danger', remaining<=60000); },1000); }
 function timeUp(){ if(!state.currentExam) return; const unanswered=state.currentExam.answers.filter(a=>a===null).length; showToast('انتهى الوقت! يوجد '+unanswered+' سؤالًا بدون إجابة.','error'); finishExam(); }
