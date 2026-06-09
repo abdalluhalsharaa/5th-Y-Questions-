@@ -581,32 +581,47 @@ function toggleQuestionLocation(){ if(!state.currentExam) return; const q=state.
 function confirmRemoveCurrentWrong(){ if(!state.currentExam || state.currentExam.collectionType!=='wrong') return; const q=state.currentExam.questions[state.currentExam.currentIndex]; askConfirm('هل أتقنت هذا السؤال وتريد إزالته من الأسئلة الخاطئة؟', ()=>removeWrongQuestionsByIds([q.id])); }
 function removeWrongQuestionsByIds(ids){ const set=new Set(ids); state.wrongQuestions = state.wrongQuestions.filter(id=>!set.has(id)); saveWrongQuestions(); updateStatisticsIfOpen(); if(state.currentExam){ state.currentExam.masteredWrongIds = state.currentExam.masteredWrongIds.filter(id=>!set.has(id)); renderExam(); } if(state.browseMode==='wrong') renderSubjects(); showToast('تمت إزالة السؤال/الأسئلة من قائمة الأخطاء.','success'); }
 function toggleGrid(){ const grid=el('question-grid'); const btn=el('btn-grid-toggle'); grid.classList.toggle('hidden'); btn.innerHTML=grid.classList.contains('hidden')?'<span>☰</span> إظهار الشبكة':'<span>☰</span> إخفاء الشبكة'; }
-function exitExam(saveProgress) {
-  // التحقق مما إذا كان هناك امتحان جاري ولم يتم تسليمه بعد
-  if (state.currentExam && !state.currentExam.submitted) {
-    if (saveProgress) {
-      // إذا اختار المستخدم حفظ التقدم
+function exitExam() {
+  if (!state.currentExam || state.currentExam.submitted) {
+    state.currentExam = null;
+    goHome();
+    return;
+  }
+  showDialog({
+    title: 'خروج من الامتحان',
+    message: 'هل أنت متأكد من رغبتك بالخروج من الامتحان؟',
+    showCancel: true,
+    confirmText: 'نعم وعدم حفظ التقدم',
+    cancelText: 'عدم الخروج',
+    onConfirm: () => {
+      state.currentExam = null;
+      clearInterval(state.timerInterval);
+      state.timerInterval = null;
+      goHome();
+    },
+    onCancel: () => {}
+  });
+  setTimeout(() => {
+    const actions = document.querySelector('#dialog-overlay .dialog-actions');
+    if (!actions) return;
+    actions.querySelectorAll('.dialog-extra-btn').forEach(btn => btn.remove());
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn-primary dialog-extra-btn';
+    saveBtn.textContent = 'نعم وحفظ التقدم';
+    saveBtn.onclick = () => {
+      hideDialog();
       saveExamState();
-    } else {
-      // إذا اختار عدم حفظ التقدم، نقوم بمسح الذاكرة المؤقتة للامتحان
-      localStorage.removeItem(STORAGE_KEYS.examState);
-    }
-  }
-
-  // إعادة تعيين حالة الامتحان وإيقاف المؤقت الزمني
-  state.currentExam = null;
-  if (state.timerInterval) {
-    clearInterval(state.timerInterval);
-    state.timerInterval = null;
-  }
-
-  // إغلاق نافذة التأكيد المخصصة والعودة للشاشة الرئيسية
-  if (typeof hideDialog === 'function') {
-    hideDialog();
-  }
-  goHome();
+      state.currentExam = null;
+      clearInterval(state.timerInterval);
+      state.timerInterval = null;
+      goHome();
+    };
+    actions.appendChild(saveBtn);
+    const cancelBtn = actions.querySelector('#dialog-cancel');
+    if (cancelBtn) cancelBtn.classList.add('btn-secondary');
+    if (cancelBtn) cancelBtn.style.background = 'color-mix(in srgb, var(--bg-card) 70%, transparent 30%)';
+  }, 0);
 }
-
 
 function startTimer(){ clearInterval(state.timerInterval); const timerEl=el('exam-timer'); timerEl.classList.remove('hidden'); state.timerInterval=setInterval(()=>{ if(!state.currentExam || state.currentExam.submitted){ clearInterval(state.timerInterval); state.timerInterval=null; return; } const elapsed=Date.now()-state.currentExam.startTime; const remaining=state.currentExam.totalTime-elapsed; if(remaining<=0){ clearInterval(state.timerInterval); state.timerInterval=null; timeUp(); return; } const mins=Math.floor(remaining/60000); const secs=Math.floor((remaining%60000)/1000); timerEl.textContent=mins+':'+String(secs).padStart(2,'0'); timerEl.classList.toggle('timer-danger', remaining<=60000); },1000); }
 function timeUp(){ if(!state.currentExam) return; const unanswered=state.currentExam.answers.filter(a=>a===null).length; showToast('انتهى الوقت! يوجد '+unanswered+' سؤالًا بدون إجابة.','error'); finishExam(); }
@@ -703,10 +718,35 @@ function showFireworks(durationFrames=80, explosionCount=18){ const canvas=el('f
 
 function goHome(){ const wasResults = el('results-screen').classList.contains('active'); toggleExamSettings(false); closeStatsExclusionDialog(); closeResetModal(); closeSubjectStatsSettings(); state.currentSubject=null; showScreen('home-screen'); const review=el('results-review'); if(review) review.classList.add('hidden'); if(wasResults){ setTimeout(()=>softReloadApp(), 150); } }
 function softReloadApp(){ const currentAudioTime = el('bg-audio') ? el('bg-audio').currentTime : 0; renderSubjects(); updateStatisticsIfOpen(); renderChecklist(); renderMemories(); if(el('bg-audio') && state.settings.bgSoundEnabled!==false && state.settings.bgSound!=='none'){ try{ el('bg-audio').currentTime = currentAudioTime; el('bg-audio').play().catch(()=>{}); }catch(e){} } }
-function checkResumeExam(){
-  clearExamState();
+function checkResumeExam() {
+  const raw = localStorage.getItem(STORAGE_KEYS.examState);
+  if (!raw) return;
+  try {
+    const saved = JSON.parse(raw);
+    if (!saved || saved.submitted || !Array.isArray(saved.questions) || !saved.questions.length) {
+      clearExamState();
+      return;
+    }
+    showDialog({
+      title: 'امتحان غير مكتمل',
+      message: 'يوجد امتحان غير مكتمل. هل تريد العودة لإستكمال ذاك الامتحان؟',
+      showCancel: true,
+      confirmText: 'نعم أريد إكمال ذاك الامتحان',
+      cancelText: 'لا (ستفقد بيانات التقدم لذاك الامتحان)',
+      onConfirm: () => {
+        state.currentExam = saved;
+        showScreen('exam-screen');
+        renderExam();
+        if (state.currentExam.mode === 'exam') startTimer();
+      },
+      onCancel: () => {
+        clearExamState();
+      }
+    });
+  } catch {
+    clearExamState();
+  }
 }
-
 
 function normalizeText(text){ return String(text||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\t/g,'    ').replace(/\/\/\/\/\/\//g,'\n').trim(); }
 function parseQuestionFile(raw, meta){ const text=normalizeText(raw); if(!text) return []; let blocks=text.split(/(?:^|\n)\s*###\s*(?=\n|$)/g).map(x=>x.trim()).filter(Boolean); if(blocks.length<=1){ const paragraphs=text.split(/\n{2,}/).map(x=>x.trim()).filter(Boolean); if(paragraphs.length<=1) blocks=[text]; else { blocks=[]; let current=[]; let hasCorrect=false; for(let i=0;i<paragraphs.length;i++){ const p=paragraphs[i]; const first=(p.split('\n').find(l=>l.trim())||'').trim(); const looksNew=current.length>0 && hasCorrect && !/^(Correct\s*Answer|Explanation)\s*:/i.test(first) && !/^[A-E][\)\.\-]/.test(first) && !isPageLine(first); if(looksNew){ blocks.push(current.join('\n\n').trim()); current=[]; hasCorrect=false; } current.push(p); if(/^\s*Correct\s*Answer\s*:/im.test(p)) hasCorrect=true; if(i===paragraphs.length-1 && current.length) blocks.push(current.join('\n\n').trim()); } } }
