@@ -605,9 +605,22 @@ function exitExam() {
     const actions = document.querySelector('#dialog-overlay .dialog-actions');
     if (!actions) return;
     actions.querySelectorAll('.dialog-extra-btn').forEach(btn => btn.remove());
+    
+    const confirmBtn = actions.querySelector('#dialog-confirm');
+    const cancelBtn = actions.querySelector('#dialog-cancel');
+    
+    if (confirmBtn) {
+      confirmBtn.style.backgroundColor = '#ffffff';
+      confirmBtn.style.color = 'var(--text)';
+      confirmBtn.style.border = '1px solid var(--border)';
+    }
+    
     const saveBtn = document.createElement('button');
     saveBtn.className = 'btn-primary dialog-extra-btn';
     saveBtn.textContent = 'نعم وحفظ التقدم';
+    saveBtn.style.backgroundColor = 'var(--primary-light)';
+    saveBtn.style.color = '#ffffff';
+    saveBtn.style.border = 'none';
     saveBtn.onclick = () => {
       hideDialog();
       saveExamState();
@@ -616,10 +629,24 @@ function exitExam() {
       state.timerInterval = null;
       goHome();
     };
+    
+    if (cancelBtn) {
+      cancelBtn.style.backgroundColor = 'var(--primary)';
+      cancelBtn.style.color = '#ffffff';
+      cancelBtn.style.border = 'none';
+    }
+    
+    actions.innerHTML = '';
+    if (confirmBtn) actions.appendChild(confirmBtn);
     actions.appendChild(saveBtn);
-    const cancelBtn = actions.querySelector('#dialog-cancel');
-    if (cancelBtn) cancelBtn.classList.add('btn-secondary');
-    if (cancelBtn) cancelBtn.style.background = 'color-mix(in srgb, var(--bg-card) 70%, transparent 30%)';
+    if (cancelBtn) actions.appendChild(cancelBtn);
+    
+    const actionButtons = actions.querySelectorAll('button');
+    actionButtons.forEach(btn => {
+      btn.style.display = 'block';
+      btn.style.width = '100%';
+      btn.style.margin = '8px 0';
+    });
   }, 0);
 }
 
@@ -743,6 +770,12 @@ function checkResumeExam() {
         clearExamState();
       }
     });
+    setTimeout(() => {
+      const actions = document.querySelector('#dialog-overlay .dialog-actions');
+      if (actions) {
+        actions.querySelectorAll('.dialog-extra-btn').forEach(btn => btn.remove());
+      }
+    }, 0);
   } catch {
     clearExamState();
   }
