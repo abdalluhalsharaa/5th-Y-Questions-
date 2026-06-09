@@ -610,18 +610,30 @@ function exitExam() {
     const cancelBtn = document.getElementById('dialog-cancel');
     if (!confirmBtn || !cancelBtn) return;
     
+    // زر "نعم وعدم حفظ التقدم" (أعلى)
     confirmBtn.classList.remove('btn-primary');
     confirmBtn.classList.add('btn-secondary');
     confirmBtn.style.background = 'var(--bg-card)';
     confirmBtn.style.color = 'var(--text)';
     confirmBtn.style.border = '1px solid var(--border)';
     
+    // زر "عدم الخروج" (أسفل) بنفس لون زر التأكيد في رسالة الامتحان غير المكتمل
     cancelBtn.classList.remove('btn-secondary');
     cancelBtn.classList.add('btn-primary');
+    cancelBtn.style.background = '';
+    cancelBtn.style.color = '';
     
+    // زر "نعم وحفظ التقدم" (وسط) بخلفية متوسطة
     const saveBtn = document.createElement('button');
-    saveBtn.className = 'btn-primary dialog-extra-btn';
+    saveBtn.className = 'dialog-extra-btn';
     saveBtn.textContent = 'نعم وحفظ التقدم';
+    saveBtn.style.background = 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 40%, #fff 60%), color-mix(in srgb, var(--primary-light) 40%, #fff 60%))';
+    saveBtn.style.color = 'var(--text)';
+    saveBtn.style.border = 'none';
+    saveBtn.style.borderRadius = '12px';
+    saveBtn.style.padding = '12px 26px';
+    saveBtn.style.fontWeight = '800';
+    saveBtn.style.cursor = 'pointer';
     saveBtn.onclick = () => {
       hideDialog();
       saveExamState();
@@ -867,7 +879,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   document.addEventListener('click',e=>{ if(!e.target.closest('.subject-card')) closeSubjectActions(); });
   primeAudioUnlock(); await prepareStaticEffectAudio();
   renderSubjects(); renderChecklist(); renderMemories();
-  try{ await loadData(); }catch(err){ console.error(err); renderSubjects(); renderChecklist(); showToast('تعذر تحميل بيانات GitHub الآن. تحقّق من الاتصال أو بنية المجلدات أو تأكد من أن الفرع هو main/master/gh-pages.','error'); }
+    try{ await loadData(); }catch(err){ console.error(err); renderSubjects(); renderChecklist(); showToast('سيتم العمل على حل المشكلة بأقرب وقت ، للتواصل تيليجرام : @joabdullah2005','error'); }
   checkResumeExam();
 });
 
