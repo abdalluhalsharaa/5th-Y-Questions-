@@ -567,7 +567,33 @@ function renderRemoveWrongBtn(){ if(!state.currentExam || state.currentExam.coll
 function startSpecialExam(questions, mode, direction){ startExamSession(shuffleArray(questions.slice()).map(prepareQuestionForExam), mode, direction||'twoway', 'special', 5, { collectionType:null, displayLabel:'Special Exam', historySubjectName:'Special Exam', historyGroups:[] }); }
 
 function renderOptionButton(opt, i, idx, showAnswerState, selectedIndex, correctIdx){ let cls='option-btn'; if(selectedIndex===i) cls+=' selected'; if(showAnswerState){ if(i===correctIdx) cls+=' correct'; else if(selectedIndex===i && i!==correctIdx) cls+=' wrong'; } return `<button class="${cls}" onclick="selectOption(${i})"><span class="option-label">${LETTERS[i]})</span>${escapeHtml(cleanOptionDisplay(opt))}</button>`; }
-function renderExam(){ if(!state.currentExam) return; const t=theme(); const questions=state.currentExam.questions; const idx=state.currentExam.currentIndex; const q=questions[idx]; if(!q) return; let progressText=t.icons.progress+' '+(idx+1)+'/'+questions.length; if(state.currentExam.mode==='training'){ const answered=state.currentExam.firstAnswers.filter(x=>x!==null).length; const correct=state.currentExam.firstAnswers.filter((ans,i)=>ans!==null && isAnswerCorrect(questions[i],ans)).length; const pct=answered>0 ? Math.round((correct/answered)*100) : 0; progressText+=' · '+t.icons.success+correct+' · '+pct+'%'; } else progressText+=' · '+(questions.length-idx)+' left'; el('exam-progress').textContent=progressText; renderGrid(); const correctIdx=getCorrectIndex(q); const showAnswerState=state.currentExam.mode==='training' && state.currentExam.showAnswer; const fav=state.favorites.includes(q.id); const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswer(q))}</span></div>` : ''; el('question-container').innerHTML=`<div class="question-header"><span class="question-number">Q${escapeHtml(q.number||String(idx+1))}</span><div class="question-actions"><button class="icon-btn ${fav?'active':''}" onclick="toggleFavorite('${q.id}')">💚</button><button class="icon-btn" onclick="toggleQuestionLocation()">${t.icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${renderRemoveWrongBtn()}`; el('question-container').classList.add('exam-content-ltr'); renderExamNav(); }
+function renderExam(){
+  if(!state.currentExam) return;
+  const t=theme();
+  const questions=state.currentExam.questions;
+  const idx=state.currentExam.currentIndex;
+  const q=questions[idx];
+  if(!q) return;
+  let progressCompactText = '';
+  if(state.currentExam.mode==='training'){
+    const answered=state.currentExam.firstAnswers.filter(x=>x!==null).length;
+    const correct=state.currentExam.firstAnswers.filter((ans,i)=>ans!==null && isAnswerCorrect(questions[i],ans)).length;
+    const pct=answered>0 ? Math.round((correct/answered)*100) : 0;
+    progressCompactText = `🎯 ${idx+1}/${questions.length} · ✅${correct} · ${pct}%`;
+  } else {
+    progressCompactText = `🎯 ${idx+1}/${questions.length}`;
+  }
+  const progressEl = el('exam-progress-compact');
+  if(progressEl) progressEl.textContent = progressCompactText;
+  renderGrid();
+  const correctIdx=getCorrectIndex(q);
+  const showAnswerState=state.currentExam.mode==='training' && state.currentExam.showAnswer;
+  const fav=state.favorites.includes(q.id);
+  const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswer(q))}</span></div>` : '';
+  el('question-container').innerHTML=`<div class="question-header"><span class="question-number">Q${escapeHtml(q.number||String(idx+1))}</span><div class="question-actions"><button class="icon-btn ${fav?'active':''}" onclick="toggleFavorite('${q.id}')">💚</button><button class="icon-btn" onclick="toggleQuestionLocation()">${t.icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${renderRemoveWrongBtn()}`;
+  el('question-container').classList.add('exam-content-ltr');
+  renderExamNav();
+}
 function renderGrid(){ if(!state.currentExam) return; const grid=el('question-grid'); grid.innerHTML=''; state.currentExam.questions.forEach((q,idx)=>{ let cls='grid-btn'; if(idx===state.currentExam.currentIndex) cls+=' current'; else if(state.currentExam.answers[idx]!==null){ if(state.currentExam.mode==='training' && state.currentExam.firstAnswers[idx]!==null) cls+=isAnswerCorrect(q,state.currentExam.firstAnswers[idx])?' answered':' wrong'; else cls+=' answered'; } if(state.currentExam.direction==='oneway' && idx<state.currentExam.currentIndex) cls+=' disabled'; const btn=document.createElement('button'); btn.className=cls; btn.textContent=String(idx+1); btn.onclick=()=>navigateToQuestion(idx); grid.appendChild(btn); }); }
 function renderExamNav(){ if(!state.currentExam) return; const nav=el('exam-nav'); const idx=state.currentExam.currentIndex, last=state.currentExam.questions.length-1; let prevBtn='<span></span>', nextBtn='<span></span>'; if(state.currentExam.direction==='twoway' && idx>0) prevBtn='<button class="btn-secondary" onclick="prevQuestion()">Previous ←</button>'; if(state.currentExam.mode==='training'){ if(state.currentExam.showAnswer) nextBtn=idx<last?'<button class="btn-primary" onclick="nextQuestion()">Next →</button>':'<button class="btn-primary" onclick="finishExam()">Finish</button>'; else if(state.currentExam.answers[idx]!==null) nextBtn='<button class="btn-small" onclick="showAnswer()">Show Answer</button>'; } else if(state.currentExam.answers[idx]!==null) nextBtn=idx<last?'<button class="btn-primary" onclick="nextQuestion()">Next →</button>':'<button class="btn-primary" onclick="finishExam()">Finish</button>'; nav.innerHTML=prevBtn + nextBtn; }
 function selectOption(optionIndex){ if(!state.currentExam || state.currentExam.submitted) return; if(state.currentExam.mode==='training' && state.currentExam.showAnswer) return; const idx=state.currentExam.currentIndex; const q=state.currentExam.questions[idx]; state.currentExam.answers[idx]=optionIndex; if(state.currentExam.firstAnswers[idx]===null) state.currentExam.firstAnswers[idx]=optionIndex; const correct=isAnswerCorrect(q,optionIndex); if(state.currentExam.mode==='training'){ if(state.settings.feedbackEnabled) playEffectSound(correct?'right':'wrong'); if(correct){ state.currentExam.showAnswer=true; if(state.settings.animations!==false) showFireworks(48,12); } else { if(!state.wrongQuestions.includes(q.id)){ state.wrongQuestions.push(q.id); saveWrongQuestions(); } showToast(themeWrongMessage(),'error'); } saveExamState(); renderExam(); } else { saveExamState(); renderExam(); } }
@@ -661,14 +687,76 @@ function recordExamMemory(){ if(!state.currentExam) return; const end = state.cu
   state.examHistory.push({ id:'exam_'+Date.now()+'_'+Math.random().toString(36).slice(2,7), startedAt:start, endedAt:end, durationMs:end-start, mode:state.currentExam.mode, sourceLabel:state.currentExam.displayLabel || state.currentExam.sourceLabel || 'Exam', collectionType:state.currentExam.collectionType || null, total:stats.total, correct:stats.correct, score:stats.score, subjectName: state.currentExam.historySubjectName || (state.currentExam.questions[0]?.subjectName || 'Unknown Subject'), groups: state.currentExam.historyGroups || [] });
   saveMemoryStores();
 }
-function finishExam(){ if(!state.currentExam) return; state.currentExam.submitted=true; state.currentExam.endTime=Date.now(); if(state.currentExam.mode==='exam'){ state.currentExam.questions.forEach((q,idx)=>{ const ans=state.currentExam.answers[idx]; if(ans!==null && !isAnswerCorrect(q,ans) && !state.wrongQuestions.includes(q.id)) state.wrongQuestions.push(q.id); }); saveWrongQuestions(); } clearInterval(state.timerInterval); state.timerInterval=null; saveProgress(); recordExamMemory(); clearExamState(); if(state.currentExam.mode==='exam'){ showScreen('results-screen'); showWaitingMessages(); } else showResults(); }
+function finishExam(){
+  if(!state.currentExam) return;
+  const unansweredCount = state.currentExam.answers.filter(a => a === null).length;
+  if(state.currentExam.mode === 'training' && unansweredCount > 0){
+    showDialog({
+      title: 'تأكيد التسليم',
+      message: `هناك ${unansweredCount} سؤال لم تحلهم، هل تريد تأكيد تسليم الاختبار دون حلهم؟`,
+      showCancel: true,
+      confirmText: 'نعم',
+      cancelText: 'لا، العودة للامتحان',
+      onConfirm: () => {
+        submitExamFinish();
+      },
+      onCancel: () => {}
+    });
+    return;
+  }
+  submitExamFinish();
+}
+
+function submitExamFinish(){
+  if(!state.currentExam) return;
+  state.currentExam.submitted=true;
+  state.currentExam.endTime=Date.now();
+  if(state.currentExam.mode==='exam'){
+    state.currentExam.questions.forEach((q,idx)=>{
+      const ans=state.currentExam.answers[idx];
+      if(ans!==null && !isAnswerCorrect(q,ans) && !state.wrongQuestions.includes(q.id)) state.wrongQuestions.push(q.id);
+    });
+    saveWrongQuestions();
+  }
+  clearInterval(state.timerInterval);
+  state.timerInterval=null;
+  saveProgress();
+  recordExamMemory();
+  clearExamState();
+  if(state.currentExam.mode==='exam'){
+    showScreen('results-screen');
+    showWaitingMessages();
+  } else showResults();
+}
 function saveProgress(){ if(!state.currentExam) return; const answers=state.currentExam.mode==='exam'?state.currentExam.answers:state.currentExam.firstAnswers; state.currentExam.questions.forEach((q,idx)=>{ if(answers[idx]===null) return; addProgressId('subject:'+q.subjectName,q.id); const actual=q.originalSourceType||q.sourceType; if(actual==='lecture') addProgressId('lecture:'+q.subjectName+'/'+q.lectureName,q.id); if(actual==='ai') addProgressId('ai:'+q.subjectName+'/'+q.lectureName,q.id); if(q.batchName) addProgressId('year:'+q.subjectName+'/'+q.batchName,q.id); }); saveProgressStore(); updateStatisticsIfOpen(); renderMemories(); }
 function showWaitingMessages(){ const waitDiv=el('results-waiting'), contentDiv=el('results-content'), reviewDiv=el('results-review'), messageEl=el('waiting-message'); const messages=['انتظر ...','قاعد بصلّح لك الامتحان ...','استنى شوي ...','هاي قرّبت أكمل ...','أصبر ثواني ...','هيني كمّلت 🫡🐦‍🔥💚']; waitDiv.classList.remove('hidden'); reviewDiv.classList.add('hidden'); reviewDiv.innerHTML=''; contentDiv.innerHTML=''; let idx=0; messageEl.textContent=messages[0]; const interval=setInterval(()=>{ idx=Math.min(idx+1, messages.length-1); messageEl.textContent=messages[idx]; },1150); setTimeout(()=>{ clearInterval(interval); waitDiv.classList.add('hidden'); showResults(); },7000); }
 function calculateScore(exam){ const questions=exam.questions; const answers=exam.mode==='exam'?exam.answers:exam.firstAnswers; const total=questions.length; const answered=answers.filter(a=>a!==null).length; const correct=answers.reduce((sum,a,idx)=>sum + (a!==null && isAnswerCorrect(questions[idx],a) ? 1 : 0),0); return {total, answered, correct, unanswered:total-answered, incorrect:answered-correct, score: total>0 ? Math.round((correct/total)*100) : 0}; }
 function renderMasteredWrongButton(){ if(!state.currentExam || !state.currentExam.masteredWrongIds || !state.currentExam.masteredWrongIds.length) return ''; return `<button class="btn-secondary mt-10" onclick="confirmBulkRemoveMasteredWrong()">✅ إزالة الأسئلة التي تمكنت منها من الأسئلة الخاطئة</button>`; }
 function confirmBulkRemoveMasteredWrong(){ if(!state.currentExam || !state.currentExam.masteredWrongIds || !state.currentExam.masteredWrongIds.length) return; askConfirm('سيتم إزالة كل الأسئلة التي أجبت عنها بشكل صحيح في هذا الامتحان من قائمة الأسئلة الخاطئة. هل تريد المتابعة؟', ()=>removeWrongQuestionsByIds(state.currentExam.masteredWrongIds.slice())); }
 function showResults(){ if(!state.currentExam) return; const t=theme(); showScreen('results-screen'); el('results-title').textContent=t.icons.results+' '+t.texts.resultsTitle; const stats=calculateScore(state.currentExam); const timeSpent=state.currentExam.endTime ? Math.round((state.currentExam.endTime-state.currentExam.startTime)/1000) : 0; const mins=Math.floor(timeSpent/60), secs=timeSpent%60; if(stats.score>=50){ playCelebrateSound(); if(state.settings.animations!==false) showFireworks(110,24); } el('results-content').innerHTML=`<div class="result-score">${stats.score}%</div><div class="result-details"><div class="result-card"><div class="value">${stats.correct}/${stats.total}</div><div class="label">Correct</div></div><div class="result-card"><div class="value">${mins}m ${secs}s</div><div class="label">Time Spent</div></div><div class="result-card"><div class="value">${stats.unanswered}</div><div class="label">Unanswered</div></div><div class="result-card"><div class="value">${stats.incorrect}</div><div class="label">Incorrect</div></div></div><button class="btn-primary mt-20" onclick="reviewExam()">${t.icons.review} Review Questions</button>${renderMasteredWrongButton()}<button class="btn-secondary mt-10" onclick="goHome()">${t.icons.exams} Back to Home</button>`; }
-function reviewExam(){ if(!state.currentExam) return; const reviewDiv=el('results-review'); reviewDiv.classList.remove('hidden'); let html='<h3 class="mt-20" style="text-align:right">'+theme().icons.review+' Review</h3>'; state.currentExam.questions.forEach((q,idx)=>{ const answersUsed = state.currentExam.mode==='exam' ? state.currentExam.answers : state.currentExam.firstAnswers; const userAnswer=answersUsed[idx]; const correctIdx=getCorrectIndex(q); const ok=userAnswer===correctIdx; html += `<div class="question-container review-question-card mt-10" style="border-inline-start:4px solid ${ok?'var(--success)':'var(--danger)'};"><div class="question-header"><span class="question-number">Q${escapeHtml(q.number||String(idx+1))}</span><span style="color:${ok?'var(--success)':'var(--danger)'};font-weight:900;">${ok?theme().icons.success+' Correct':theme().icons.error+' Wrong'}</span></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>{ let cls='option-btn'; if(i===correctIdx) cls+=' correct'; if(i===userAnswer && i!==correctIdx) cls+=' wrong'; return '<div class="'+cls+'" style="cursor:default;"><span class="option-label">'+LETTERS[i]+')</span>'+escapeHtml(cleanOptionDisplay(opt))+'</div>'; }).join('')}</div><div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswer(q))}</span></div><div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div></div>`; }); reviewDiv.innerHTML=html; }
+function reviewExam(){
+  if(!state.currentExam) return;
+  const reviewDiv=el('results-review');
+  reviewDiv.classList.remove('hidden');
+  let html='<h3 class="mt-20" style="text-align:right">'+theme().icons.review+' Review</h3>';
+  state.currentExam.questions.forEach((q,idx)=>{
+    const answersUsed = state.currentExam.mode==='exam' ? state.currentExam.answers : state.currentExam.firstAnswers;
+    const userAnswer=answersUsed[idx];
+    const correctIdx=getCorrectIndex(q);
+    const isUnanswered = (userAnswer === null);
+    let statusLabel, statusColor;
+    if(isUnanswered){
+      statusLabel = '❓ You didn\'t answer it';
+      statusColor = 'var(--text-muted)';
+    } else {
+      const ok = (userAnswer === correctIdx);
+      statusLabel = ok ? (theme().icons.success+' Correct') : (theme().icons.error+' Wrong');
+      statusColor = ok ? 'var(--success)' : 'var(--danger)';
+    }
+    html += `<div class="question-container review-question-card mt-10" style="border-inline-start:4px solid ${isUnanswered ? 'var(--text-muted)' : (userAnswer===correctIdx ? 'var(--success)' : 'var(--danger)')};"><div class="question-header"><span class="question-number">Q${escapeHtml(q.number||String(idx+1))}</span><span style="color:${statusColor};font-weight:900;">${statusLabel}</span></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>{ let cls='option-btn'; if(i===correctIdx) cls+=' correct'; if(i===userAnswer && i!==correctIdx && !isUnanswered) cls+=' wrong'; return '<div class="'+cls+'" style="cursor:default;"><span class="option-label">'+LETTERS[i]+')</span>'+escapeHtml(cleanOptionDisplay(opt))+'</div>'; }).join('')}</div><div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswer(q))}</span></div><div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div></div>`;
+  });
+  reviewDiv.innerHTML=html;
+}
 
 function populateSearchFilter(){ const filter=el('search-filter'); if(!filter) return; filter.innerHTML='<option value="all">All Subjects</option>'; state.subjects.forEach(s=>{ filter.innerHTML += '<option value="'+escapeAttribute(s.id)+'">'+escapeHtml(s.name)+'</option>'; }); }
 function performSearch(){ const query=String(el('search-input').value||'').toLowerCase().trim(); const filter=el('search-filter').value; const resultsDiv=el('search-results'); if(query.length<2){ resultsDiv.innerHTML='<p style="color:var(--text-muted); text-align:center; padding:20px;">اكتب حرفين على الأقل للبحث...</p>'; return; } const t=theme(); const results=state.allQuestions.filter(q=>{ const text=[q.text,(q.options||[]).join(' '),q.explanation||'',q.batchName||'',q.lectureName||'',q.subjectName||''].join(' ').toLowerCase(); const matches=filter==='all'||q.subjectId===filter||slugify(q.subjectName)===filter; return text.includes(query) && matches; }); if(!results.length){ resultsDiv.innerHTML='<p style="color:var(--text-muted); text-align:center; padding:20px;">لا توجد نتائج مطابقة.</p>'; return; } resultsDiv.innerHTML=results.slice(0,60).map(q=>`<div class="search-result-item" onclick="openReadonly('${q.id}')"><p><strong>Q${escapeHtml(q.number||'?')}:</strong> ${escapeHtml(shortenText(q.text,140))}</p><div class="search-result-meta">${t.icons.subject} ${escapeHtml(q.subjectName||'')} · ${q.sourceType==='ai'?t.icons.ai:t.icons.lectures} ${escapeHtml(q.lectureName||'')} ${q.batchName?'· '+t.icons.years+' '+escapeHtml(q.batchName):''} ${q.pageNumber?'· '+t.icons.location+' '+escapeHtml(q.pageNumber):''}</div></div>`).join(''); }
