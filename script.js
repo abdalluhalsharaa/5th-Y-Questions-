@@ -606,21 +606,22 @@ function exitExam() {
     if (!actions) return;
     actions.querySelectorAll('.dialog-extra-btn').forEach(btn => btn.remove());
     
-    const confirmBtn = actions.querySelector('#dialog-confirm');
-    const cancelBtn = actions.querySelector('#dialog-cancel');
+    const confirmBtn = document.getElementById('dialog-confirm');
+    const cancelBtn = document.getElementById('dialog-cancel');
+    if (!confirmBtn || !cancelBtn) return;
     
-    if (confirmBtn) {
-      confirmBtn.style.backgroundColor = '#ffffff';
-      confirmBtn.style.color = 'var(--text)';
-      confirmBtn.style.border = '1px solid var(--border)';
-    }
+    confirmBtn.classList.remove('btn-primary');
+    confirmBtn.classList.add('btn-secondary');
+    confirmBtn.style.background = 'var(--bg-card)';
+    confirmBtn.style.color = 'var(--text)';
+    confirmBtn.style.border = '1px solid var(--border)';
+    
+    cancelBtn.classList.remove('btn-secondary');
+    cancelBtn.classList.add('btn-primary');
     
     const saveBtn = document.createElement('button');
     saveBtn.className = 'btn-primary dialog-extra-btn';
     saveBtn.textContent = 'نعم وحفظ التقدم';
-    saveBtn.style.backgroundColor = 'var(--primary-light)';
-    saveBtn.style.color = '#ffffff';
-    saveBtn.style.border = 'none';
     saveBtn.onclick = () => {
       hideDialog();
       saveExamState();
@@ -630,23 +631,11 @@ function exitExam() {
       goHome();
     };
     
-    if (cancelBtn) {
-      cancelBtn.style.backgroundColor = 'var(--primary)';
-      cancelBtn.style.color = '#ffffff';
-      cancelBtn.style.border = 'none';
-    }
-    
-    actions.innerHTML = '';
-    if (confirmBtn) actions.appendChild(confirmBtn);
+    actions.removeChild(confirmBtn);
+    actions.removeChild(cancelBtn);
+    actions.appendChild(confirmBtn);
     actions.appendChild(saveBtn);
-    if (cancelBtn) actions.appendChild(cancelBtn);
-    
-    const actionButtons = actions.querySelectorAll('button');
-    actionButtons.forEach(btn => {
-      btn.style.display = 'block';
-      btn.style.width = '100%';
-      btn.style.margin = '8px 0';
-    });
+    actions.appendChild(cancelBtn);
   }, 0);
 }
 
@@ -770,12 +759,6 @@ function checkResumeExam() {
         clearExamState();
       }
     });
-    setTimeout(() => {
-      const actions = document.querySelector('#dialog-overlay .dialog-actions');
-      if (actions) {
-        actions.querySelectorAll('.dialog-extra-btn').forEach(btn => btn.remove());
-      }
-    }, 0);
   } catch {
     clearExamState();
   }
