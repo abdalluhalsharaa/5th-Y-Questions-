@@ -779,10 +779,10 @@
     if(screenId === 'exam-screen' && localStorage.getItem('medical-app-incomplete-exam') && !state.isResumingIncompleteExam){
       showDialog({
         title: 'امتحان غير مكتمل',
-        message: '<div>يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟</div>',
+        message: 'يوجد امتحان غير مكتمل. هل تريد العودة لإستكمال ذاك الامتحان؟',
         showCancel: true,
-        confirmText: 'نعم أريد إكمال الامتحان',
-        cancelText: 'لا (ستفقد بيانات التقدم لهذا الامتحان)',
+        confirmText: 'نعم أريد إكمال ذاك الامتحان',
+        cancelText: 'لا (ستفقد بيانات التقدم لذاك الامتحان)',
         onConfirm: () => {
           try {
             const saved = JSON.parse(localStorage.getItem('medical-app-incomplete-exam'));
@@ -912,10 +912,10 @@
       if(localStorage.getItem('medical-app-incomplete-exam')){
         showDialog({
           title: 'امتحان غير مكتمل',
-          message: '<div>يوجد امتحان غير مكتمل. هل تريد المتابعة من حيث توقفت؟</div>',
+          message: 'يوجد امتحان غير مكتمل. هل تريد العودة لإستكمال ذاك الامتحان؟',
           showCancel: true,
-          confirmText: 'نعم أريد إكمال الامتحان',
-          cancelText: 'لا (ستفقد بيانات التقدم لهذا الامتحان)',
+          confirmText: 'نعم أريد إكمال ذاك الامتحان',
+          cancelText: 'لا (ستفقد بيانات التقدم لذاك الامتحان)',
           onConfirm: () => {
             try {
               const saved = JSON.parse(localStorage.getItem('medical-app-incomplete-exam'));
@@ -936,7 +936,6 @@
         });
       }
     }, 200);
-
     /* Global click interceptor for Exam Exit button */
     document.addEventListener('click', function(e){
       const target = e.target;
