@@ -773,13 +773,14 @@
     ensureGlobalHomeButtons();
   };
 
+  
   /* Intercept showScreen for incomplete exams check before entering a new exam */
   const __origShowScreen = typeof showScreen === 'function' ? showScreen : null;
   showScreen = function(screenId){
     if(screenId === 'exam-screen' && localStorage.getItem('medical-app-incomplete-exam') && !state.isResumingIncompleteExam){
       showDialog({
         title: 'امتحان غير مكتمل',
-        message: 'يوجد امتحان غير مكتمل. هل تريد العودة لإستكمال ذاك الامتحان؟',
+        message: '<div>يوجد امتحان غير مكتمل. هل تريد العودة لإستكمال ذاك الامتحان؟</div>',
         showCancel: true,
         confirmText: 'نعم أريد إكمال ذاك الامتحان',
         cancelText: 'لا (ستفقد بيانات التقدم لذاك الامتحان)',
@@ -907,35 +908,8 @@
     ensureGlobalHomeButtons();
     hookExamAudioTogglesForIOS();
 
-    /* Reload check for incomplete exam */
-    setTimeout(() => {
-      if(localStorage.getItem('medical-app-incomplete-exam')){
-        showDialog({
-          title: 'امتحان غير مكتمل',
-          message: 'يوجد امتحان غير مكتمل. هل تريد العودة لإستكمال ذاك الامتحان؟',
-          showCancel: true,
-          confirmText: 'نعم أريد إكمال ذاك الامتحان',
-          cancelText: 'لا (ستفقد بيانات التقدم لذاك الامتحان)',
-          onConfirm: () => {
-            try {
-              const saved = JSON.parse(localStorage.getItem('medical-app-incomplete-exam'));
-              if(saved) {
-                state.currentExam = saved;
-                localStorage.removeItem('medical-app-incomplete-exam');
-                state.isResumingIncompleteExam = true;
-                if(typeof showScreen === 'function') showScreen('exam-screen');
-                if(typeof renderExam === 'function') renderExam();
-                state.isResumingIncompleteExam = false;
-              }
-            } catch(e){}
-            localStorage.removeItem('medical-app-incomplete-exam');
-          },
-          onCancel: () => {
-            localStorage.removeItem('medical-app-incomplete-exam');
-          }
-        });
-      }
-    }, 200);
+
+
     /* Global click interceptor for Exam Exit button */
     document.addEventListener('click', function(e){
       const target = e.target;
@@ -946,38 +920,7 @@
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
-          
-          removeDialogExtras();
-          showDialog({
-            title: 'خروج من الامتحان',
-            message: '<div>هل أنت متأكد من رغبتك بالخروج من الامتحان؟</div>',
-            showCancel: true,
-            confirmText: 'نعم وعدم حفظ التقدم',
-            cancelText: 'عدم الخروج',
-            onConfirm: () => {
-              localStorage.removeItem('medical-app-incomplete-exam');
-              if(typeof goHome === 'function') goHome();
-              else if(typeof showScreen === 'function') showScreen('home-screen');
-            },
-            onCancel: () => {}
-          });
-
-          setTimeout(() => {
-            const actions = document.querySelector('#dialog-overlay .dialog-actions');
-            if(!actions) return;
-            const saveBtn = document.createElement('button');
-            saveBtn.className = 'btn-primary dialog-extra-btn';
-            saveBtn.textContent = 'نعم وحفظ التقدم';
-            saveBtn.onclick = function(){
-              hideDialog();
-              if(state.currentExam) {
-                localStorage.setItem('medical-app-incomplete-exam', JSON.stringify(state.currentExam));
-              }
-              if(typeof goHome === 'function') goHome();
-              else if(typeof showScreen === 'function') showScreen('home-screen');
-            };
-            actions.appendChild(saveBtn);
-          }, 0);
+          exitExam();
         }
       }
     }, true);
