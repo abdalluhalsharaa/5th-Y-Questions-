@@ -574,17 +574,18 @@ function renderExam(){
   const idx=state.currentExam.currentIndex;
   const q=questions[idx];
   if(!q) return;
-  let progressCompactText = '';
+  const progressEl = el('exam-progress-compact');
   if(state.currentExam.mode==='training'){
     const answered=state.currentExam.firstAnswers.filter(x=>x!==null).length;
     const correct=state.currentExam.firstAnswers.filter((ans,i)=>ans!==null && isAnswerCorrect(questions[i],ans)).length;
     const pct=answered>0 ? Math.round((correct/answered)*100) : 0;
-    progressCompactText = `🎯 ${idx+1}/${questions.length} · ✅${correct} · ${pct}%`;
+    if(progressEl){
+      progressEl.textContent = `🎯 ${idx+1}/${questions.length} · ✅${correct} · ${pct}%`;
+      progressEl.classList.remove('hidden');
+    }
   } else {
-    progressCompactText = `🎯 ${idx+1}/${questions.length}`;
+    if(progressEl) progressEl.classList.add('hidden');
   }
-  const progressEl = el('exam-progress-compact');
-  if(progressEl) progressEl.textContent = progressCompactText;
   renderGrid();
   const correctIdx=getCorrectIndex(q);
   const showAnswerState=state.currentExam.mode==='training' && state.currentExam.showAnswer;
