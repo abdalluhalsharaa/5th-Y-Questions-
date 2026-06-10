@@ -616,7 +616,7 @@ function renderExam(){
     const correct = state.currentExam.firstAnswers.filter((ans, i) => ans !== null && isAnswerCorrect(questions[i], ans)).length;
     const pct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
     if(progressEl){
-      progressEl.textContent = `🎯 ${idx+1}/${questions.length} · ✅${correct} · ${pct}%`;
+      progressEl.textContent = `🎯 ${questions.length}/${answered} · ✅${correct} · ${pct}%`;
       progressEl.classList.remove('hidden');
     }
     if(timerEl) timerEl.classList.add('hidden');
