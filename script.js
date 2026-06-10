@@ -562,7 +562,42 @@ function prepareQuestionForExam(question){
   return clone;
 }
 
-function startExamSession(questions,mode,direction,sourceLabel,extraMinutes,meta){ state.currentExam={ mode, direction, sourceLabel:sourceLabel||'custom', collectionType: meta && meta.collectionType ? meta.collectionType : null, displayLabel: meta && meta.displayLabel ? meta.displayLabel : (sourceLabel||'Exam'), historySubjectName: meta?.historySubjectName || null, historyGroups: meta?.historyGroups || [], questions:questions.map(q=>Object.assign({},q)), currentIndex:0, answers:new Array(questions.length).fill(null), firstAnswers:new Array(questions.length).fill(null), startTime:Date.now(), totalTime:(questions.length+(extraMinutes||0))*60*1000, submitted:false, showAnswer:false, masteredWrongIds:[] }; saveExamState(); showScreen('exam-screen'); renderExam(); if(mode==='exam') startTimer(); scrollQuestionIntoView(false); }
+function startExamSession(questions, mode, direction, sourceLabel, extraMinutes, meta) {
+  state.currentExam = {
+    mode, direction,
+    sourceLabel: sourceLabel || 'custom',
+    collectionType: meta && meta.collectionType ? meta.collectionType : null,
+    displayLabel: meta && meta.displayLabel ? meta.displayLabel : (sourceLabel || 'Exam'),
+    historySubjectName: meta?.historySubjectName || null,
+    historyGroups: meta?.historyGroups || [],
+    questions: questions.map(q => Object.assign({}, q)),
+    currentIndex: 0,
+    answers: new Array(questions.length).fill(null),
+    firstAnswers: new Array(questions.length).fill(null),
+    startTime: Date.now(),
+    totalTime: (questions.length + (extraMinutes || 0)) * 60 * 1000,
+    submitted: false,
+    showAnswer: false,
+    masteredWrongIds: []
+  };
+
+  // إظهار أو إخفاء المؤقت وعداد التقدم حسب نمط الامتحان
+  const timerEl = el('exam-timer');
+  const progressEl = el('exam-progress-compact');
+  if (mode === 'exam') {
+    if (timerEl) timerEl.classList.remove('hidden');
+    if (progressEl) progressEl.classList.add('hidden');
+  } else {
+    if (timerEl) timerEl.classList.add('hidden');
+    if (progressEl) progressEl.classList.remove('hidden');
+  }
+
+  saveExamState();
+  showScreen('exam-screen');
+  renderExam();
+  if (mode === 'exam') startTimer();
+  scrollQuestionIntoView(false);
+}
 function renderRemoveWrongBtn(){ if(!state.currentExam || state.currentExam.collectionType!=='wrong' || state.currentExam.mode!=='training') return ''; const idx=state.currentExam.currentIndex; const q=state.currentExam.questions[idx]; const answered=state.currentExam.firstAnswers[idx]; if(answered===null || !isAnswerCorrect(q, answered) || !state.wrongQuestions.includes(q.id)) return ''; return `<button class="btn-secondary mt-20" onclick="confirmRemoveCurrentWrong()">✅ إزالة السؤال من الأخطاء</button>`; }
 function startSpecialExam(questions, mode, direction){ startExamSession(shuffleArray(questions.slice()).map(prepareQuestionForExam), mode, direction||'twoway', 'special', 5, { collectionType:null, displayLabel:'Special Exam', historySubjectName:'Special Exam', historyGroups:[] }); }
 
@@ -575,16 +610,19 @@ function renderExam(){
   const q=questions[idx];
   if(!q) return;
   const progressEl = el('exam-progress-compact');
-  if(state.currentExam.mode==='training'){
-    const answered=state.currentExam.firstAnswers.filter(x=>x!==null).length;
-    const correct=state.currentExam.firstAnswers.filter((ans,i)=>ans!==null && isAnswerCorrect(questions[i],ans)).length;
-    const pct=answered>0 ? Math.round((correct/answered)*100) : 0;
+  const timerEl = el('exam-timer');
+  if(state.currentExam.mode === 'training'){
+    const answered = state.currentExam.firstAnswers.filter(x => x !== null).length;
+    const correct = state.currentExam.firstAnswers.filter((ans, i) => ans !== null && isAnswerCorrect(questions[i], ans)).length;
+    const pct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
     if(progressEl){
       progressEl.textContent = `🎯 ${idx+1}/${questions.length} · ✅${correct} · ${pct}%`;
       progressEl.classList.remove('hidden');
     }
+    if(timerEl) timerEl.classList.add('hidden');
   } else {
     if(progressEl) progressEl.classList.add('hidden');
+    if(timerEl) timerEl.classList.remove('hidden');
   }
   renderGrid();
   const correctIdx=getCorrectIndex(q);
