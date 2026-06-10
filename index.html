@@ -138,11 +138,15 @@
   <div class="exam-header"><button class="btn-back" onclick="exitExam()">← Exit</button><div class="exam-header-right"></div></div>
   <div id="question-grid" class="question-grid" dir="ltr"></div>
   <div class="exam-tools-row">
-    <div id="exam-progress-compact" class="exam-progress-badge hidden">🎯 0/0 · ✅0 · 0%</div>
+  <div class="exam-tools-left">
     <button class="btn-grid-toggle" id="btn-grid-toggle" onclick="toggleGrid()"><span>☰</span> إخفاء الشبكة</button>
     <button class="btn-secondary btn-exam-settings" id="btn-exam-settings" onclick="toggleExamSettings(true)">⚙️ Exam Settings</button>
+  </div>
+  <div class="exam-tools-right">
+    <div id="exam-progress-compact" class="exam-progress-badge hidden">🎯 0/0 · ✅0 · 0%</div>
     <div id="exam-timer" class="exam-timer hidden"></div>
   </div>
+</div>
   <div id="question-container" class="question-container"></div>
   <div id="exam-nav" class="exam-nav"></div>
 </div>
