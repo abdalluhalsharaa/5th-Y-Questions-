@@ -4,7 +4,8 @@ const state = {
   currentExam: null, favorites: [], wrongQuestions: [], progress: {},
   settings: {}, subjectPreferences: { order: [], pinned: [] }, discoveredRepo: null,
   browseMode: 'all', checklistCompleted: {}, checklistExpanded: {}, statsModalSubjectId: null,
-  statsExclusions: { excludedSubjects: [], excludedSections: { lectures: false, years: false, ai: false } },
+  statsExclusions: { excludedSubjects: [], excludedSections: { lectures: false, years: false, ai: true } },
+
   subjectStatsSettings: {},
   resetSelectedSubjects: [],
   statsExpand: { subjects: {} },
@@ -93,7 +94,11 @@ function clearExamState(){ localStorage.removeItem(STORAGE_KEYS.examState); }
 function saveSubjectPreferences(){ localStorage.setItem(STORAGE_KEYS.subjectPrefs, JSON.stringify(state.subjectPreferences)); }
 function loadSubjectPreferences(){ state.subjectPreferences=Object.assign({order:[],pinned:[]}, loadJSON(STORAGE_KEYS.subjectPrefs, {})); }
 function persistStatsExclusions(){ localStorage.setItem(STORAGE_KEYS.statsExclusions, JSON.stringify(state.statsExclusions)); }
-function loadStatsExclusions(){ state.statsExclusions=Object.assign({ excludedSubjects: [], excludedSections: { lectures: false, years: false, ai: false } }, loadJSON(STORAGE_KEYS.statsExclusions, {})); }
+function loadStatsExclusions(){
+  const saved = loadJSON(STORAGE_KEYS.statsExclusions, {});
+  state.statsExclusions = Object.assign({ excludedSubjects: [], excludedSections: { lectures: false, years: false, ai: true } }, saved);
+  state.statsExclusions.excludedSections = Object.assign({ lectures: false, years: false, ai: true }, state.statsExclusions.excludedSections || {});
+}
 function persistSubjectStatsSettings(){ localStorage.setItem(STORAGE_KEYS.subjectStatsSettings, JSON.stringify(state.subjectStatsSettings)); }
 function loadSubjectStatsSettings(){ state.subjectStatsSettings=loadJSON(STORAGE_KEYS.subjectStatsSettings, {}); }
 function saveMemoryStores(){ localStorage.setItem(STORAGE_KEYS.questionLog, JSON.stringify(state.questionsFirstSeen)); localStorage.setItem(STORAGE_KEYS.examHistory, JSON.stringify(state.examHistory)); if(state.firstVisit) localStorage.setItem(STORAGE_KEYS.firstVisit, String(state.firstVisit)); }
@@ -138,17 +143,20 @@ function isSubjectExcluded(subjectId){ return getExcludedSubjectsSet().has(subje
 function isSectionExcluded(sectionType){ const map = { lecture: 'lectures', year: 'years', ai: 'ai' }; const key = map[sectionType]; return state.statsExclusions.excludedSections[key] === true; }
 function getSubjectVisibilitySettings(subjectId){ return Object.assign({ lectures:true, years:false, ai:false }, state.subjectStatsSettings[subjectId] || {}); }
 function getSubjectProgressEntryForGroup(group){ return getAnsweredCountForKey(getGroupProgressKey(group.type, group.subjectName, group.name)); }
-function getSubjectTotalQuestions(subject){
+function getSubjectTotalQuestions(subject, options = {}){
+  const { respectVisibilitySettings = false } = options;
+  const settings = respectVisibilitySettings ? getSubjectVisibilitySettings(subject.id) : { lectures: true, years: true, ai: true };
   let total = 0;
-  if(!isSectionExcluded('lecture') && getSubjectVisibilitySettings(subject.id).lectures !== false) total += subject.lectures.reduce((s,g)=>s+g.questions.length,0);
-  if(!isSectionExcluded('year') && getSubjectVisibilitySettings(subject.id).years !== false) total += subject.years.reduce((s,g)=>s+g.questions.length,0);
-  if(!isSectionExcluded('ai') && getSubjectVisibilitySettings(subject.id).ai !== false) total += subject.ai.reduce((s,g)=>s+g.questions.length,0);
+  if(!isSectionExcluded('lecture') && settings.lectures !== false) total += subject.lectures.reduce((s,g)=>s+g.questions.length,0);
+  if(!isSectionExcluded('year') && settings.years !== false) total += subject.years.reduce((s,g)=>s+g.questions.length,0);
+  if(!isSectionExcluded('ai') && settings.ai !== false) total += subject.ai.reduce((s,g)=>s+g.questions.length,0);
   return total;
 }
-function getSubjectAnsweredCount(subject){
+function getSubjectAnsweredCount(subject, options = {}){
+  const { respectVisibilitySettings = false } = options;
   const answeredSet = new Set();
   const addKey = (key) => { const entry = state.progress[key]; if(entry && entry.questionIds) entry.questionIds.forEach(id=>answeredSet.add(id)); };
-  const settings = getSubjectVisibilitySettings(subject.id);
+  const settings = respectVisibilitySettings ? getSubjectVisibilitySettings(subject.id) : { lectures: true, years: true, ai: true };
   if(!isSectionExcluded('lecture') && settings.lectures !== false) subject.lectures.forEach(g=> addKey(`lecture:${subject.name}/${g.name}`));
   if(!isSectionExcluded('year') && settings.years !== false) subject.years.forEach(g=> addKey(`year:${subject.name}/${g.name}`));
   if(!isSectionExcluded('ai') && settings.ai !== false) subject.ai.forEach(g=> addKey(`ai:${subject.name}/${g.name}`));
@@ -195,12 +203,15 @@ function renderGlobalStats(){
   const t = theme();
   container.innerHTML = `
     <div class="progress-card">
-      <h4>${t.icons.progress} النظرة العامة</h4>
+      <div class="stats-summary-head">
+        <h4>${t.icons.progress} النظرة العامة</h4>
+        <button class="btn-danger btn-mini stats-summary-reset" onclick="openResetModal()">🗑️ إعادة ضبط</button>
+      </div>
       <p><span>إجمالي الأسئلة</span><strong>${totalQuestions}</strong></p>
       <p><span>الأسئلة المكتملة</span><strong>${answeredQuestions}</strong></p>
       <p><span>الأسئلة المتبقية</span><strong>${remaining}</strong></p>
+      <div class="stats-row stats-percentage-row"><span>نسبة الإنجاز</span><strong>${percentage}%</strong></div>
       <div class="progress-bar"><span style="width:${percentage}%"></span></div>
-      <p><span>نسبة الإنجاز</span><strong>${percentage}%</strong></p>
     </div>
   `;
 }
@@ -235,6 +246,7 @@ function renderSubjectsStatsList(){
 }
 function renderSectionAnalyticsCard(subject, type, label, icon, analytics){
   const palette = getStatsSectionPalette(type);
+  const rowLabel = type==='year' ? 'الدفعة' : (type==='ai' ? 'ملف الذكاء الصناعي' : 'المحاضرة');
   const rowsHtml = analytics.rows.length ? analytics.rows.map(row => `
     <div class="stats-lecture-row" style="--subject-color:${getSubjectColor(subject.name)}">
       <div><strong>${escapeHtml(row.group.name)}</strong></div>
@@ -242,7 +254,7 @@ function renderSectionAnalyticsCard(subject, type, label, icon, analytics){
       <div class="stats-meta-pill">${row.remaining} متبقٍّ</div>
       <div class="stats-meta-pill">${row.percentage}%</div>
       <div class="stats-lecture-progress">
-        <div class="stats-row"><span>${type==='year' ? 'الدفعة' : (type==='ai' ? 'ملف AI' : 'المحاضرة')}</span><strong>${Math.max(0,row.total-row.remaining)}/${row.total}</strong></div>
+        <div class="stats-row"><span>${rowLabel}</span><strong>${Math.max(0,row.total-row.remaining)}/${row.total}</strong></div>
         <div class="progress-bar"><span style="width:${row.percentage}%"></span></div>
       </div>
     </div>
@@ -252,8 +264,10 @@ function renderSectionAnalyticsCard(subject, type, label, icon, analytics){
       <div class="stats-section-head">
         <div class="stats-section-title">${icon} ${label}</div>
         <div class="stats-meta-pill">${analytics.total} سؤال</div>
+      </div>
+      <div class="stats-section-meta">
         <div class="stats-meta-pill">${analytics.remaining} متبقٍّ</div>
-        <div class="stats-meta-pill">${analytics.percentage}%</div>
+        <div class="stats-meta-pill">نسبة الإنجاز ${analytics.percentage}%</div>
       </div>
       <div class="progress-bar" style="margin-top:10px;"><span style="width:${analytics.percentage}%"></span></div>
       <div class="stats-lecture-list">${rowsHtml}</div>
@@ -274,26 +288,28 @@ function renderSubjectStats(){
   const settings = getSubjectVisibilitySettings(subject.id);
   const t = theme();
   if(el('subject-stats-name')) el('subject-stats-name').textContent = subject.name;
-  const total = getSubjectTotalQuestions(subject);
-  const answered = getSubjectAnsweredCount(subject);
+  const total = getSubjectTotalQuestions(subject, { respectVisibilitySettings:true });
+  const answered = getSubjectAnsweredCount(subject, { respectVisibilitySettings:true });
   const remaining = Math.max(0,total-answered);
   const pct = total > 0 ? Math.round((answered/total)*100) : 0;
   if(el('subject-stats-summary')){
     el('subject-stats-summary').innerHTML = `
       <div class="progress-card">
-        <h4>${t.icons.subject} ${escapeHtml(subject.name)}</h4>
+        <div class="stats-summary-head">
+          <h4>${t.icons.subject} ${escapeHtml(subject.name)}</h4>
+        </div>
         <p><span>إجمالي الأسئلة</span><strong>${total}</strong></p>
         <p><span>المنجز</span><strong>${answered}</strong></p>
         <p><span>المتبقي</span><strong>${remaining}</strong></p>
+        <div class="stats-row stats-percentage-row"><span>نسبة الإنجاز</span><strong>${pct}%</strong></div>
         <div class="progress-bar"><span style="width:${pct}%"></span></div>
-        <p><span>نسبة الإنجاز</span><strong>${pct}%</strong></p>
       </div>
     `;
   }
   const sections = [];
   if(subject.lectures.length && !isSectionExcluded('lecture') && settings.lectures !== false) sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
   if(subject.years.length && !isSectionExcluded('year') && settings.years !== false) sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
-  if(subject.ai.length && !isSectionExcluded('ai') && settings.ai !== false) sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الاصطناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
+  if(subject.ai.length && !isSectionExcluded('ai') && settings.ai !== false) sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الصناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
   if(el('subject-stats-sections')) el('subject-stats-sections').innerHTML = sections.length ? sections.join('') : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حالياً.</p></div>';
 }
 function openSubjectCategoryFromStats(){ return; }
@@ -308,7 +324,7 @@ function openSubjectStatsSettings(subjectId){
   const sections = [];
   if(subject.lectures.length) sections.push({ id:'lectures', label:'المحاضرات', checked: settings.lectures !== false });
   if(subject.years.length) sections.push({ id:'years', label:'السنوات', checked: settings.years !== false });
-  if(subject.ai.length) sections.push({ id:'ai', label:'الذكاء الاصطناعي', checked: settings.ai !== false });
+  if(subject.ai.length) sections.push({ id:'ai', label:'الذكاء الصناعي', checked: settings.ai !== false });
   if(sections.length === 0) container.innerHTML = '<div class="stats-empty-note">لا توجد أقسام متاحة للإعدادات.</div>';
   else container.innerHTML = sections.map(sec => `
     <label style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
