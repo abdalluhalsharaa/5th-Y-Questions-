@@ -301,6 +301,35 @@
       showToast('تم تعليم العنصر كمكتمل.', 'success');
     }
   };
+  window.toggleChecklistLecture = function(groupId){
+    const found = findGroupById(groupId);
+    if(!found) return;
+
+    const isDone = !!state.checklistCompleted[groupId];
+    removeDialogExtras();
+
+    if(isDone){
+      showDialog({
+        title:'إعادة الدراسة',
+        message:'هل تريد إعادة هذه المحاضرة لوضع الدراسة ؟',
+        showCancel:true,
+        confirmText:'نعم',
+        cancelText:'لا',
+        onConfirm:()=>{
+          setGroupCompleted(groupId, false, { resetProgress:true });
+          showToast('تمت إعادة المحاضرة لوضع الدراسة.', 'success');
+        },
+        onCancel:()=>{
+          if(typeof renderChecklist === 'function') renderChecklist();
+          if(typeof renderChecklistSubject === 'function' && el('checklist-subject-screen') && el('checklist-subject-screen').classList.contains('active')) renderChecklistSubject();
+        }
+      });
+      return;
+    }
+
+    setGroupCompleted(groupId, true, { moveBottom:false, countAsAnswered:true });
+    showToast('تم تعليم المحاضرة كمكتملة.', 'success');
+  };
 
   function ensureSelectionBulkToolbar(){
     let toolbar = el('selection-bulk-toolbar');
@@ -543,31 +572,42 @@
     return `<button class="${cls}" onclick="selectOption(${i})"><span class="option-label">${LETTERS[i]})</span>${escapeHtml(cleanOptionDisplayLocal(opt))}</button>`;
   };
 
-  renderExam = function(){
+    renderExam = function(){
     if(!state.currentExam) return;
-    const questions=state.currentExam.questions;
-    const idx=state.currentExam.currentIndex;
-    const q=questions[idx];
+    const questions = state.currentExam.questions;
+    const idx = state.currentExam.currentIndex;
+    const q = questions[idx];
     if(!q) return;
 
-    const answered=state.currentExam.firstAnswers.filter(x=>x!==null).length;
-    const correct=state.currentExam.firstAnswers.filter((ans,i)=>ans!==null && isAnswerCorrect(questions[i],ans)).length;
-    const pct=answered>0 ? Math.round((correct/answered)*100) : 0;
-    const progressText = state.currentExam.mode==='training'
-      ? `🎯 ${idx+1}/${questions.length} · ✅${correct} · ${pct}%`
-      : `🎯 ${idx+1}/${questions.length}`;
+    const progressEl = el('exam-progress-compact') || el('exam-progress');
+    const timerEl = el('exam-timer');
 
-    if(el('exam-progress')) el('exam-progress').textContent=progressText;
+    if(state.currentExam.mode === 'training'){
+      const answered = state.currentExam.firstAnswers.filter(x => x !== null).length;
+      const correct = state.currentExam.firstAnswers.filter((ans, i) => ans !== null && isAnswerCorrect(questions[i], ans)).length;
+      const pct = answered > 0 ? Math.round((correct / answered) * 100) : 0;
+
+      if(progressEl){
+        progressEl.textContent = `🎯 ${answered}/${questions.length} | ✅${correct} | ${pct}%`;
+        progressEl.classList.remove('hidden');
+      }
+      if(timerEl) timerEl.classList.add('hidden');
+    } else {
+      if(progressEl) progressEl.classList.add('hidden');
+      if(timerEl) timerEl.classList.remove('hidden');
+    }
 
     renderGrid();
-    const correctIdx=getCorrectIndex(q);
-    const showAnswerState=state.currentExam.mode==='training' && state.currentExam.showAnswer;
-    const fav=state.favorites.includes(q.id);
+    const correctIdx = getCorrectIndex(q);
+    const showAnswerState = state.currentExam.mode === 'training' && state.currentExam.showAnswer;
+    const fav = state.favorites.includes(q.id);
     const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswerLocal(q))}</span></div>` : '';
+
     if(el('question-container')){
-      el('question-container').innerHTML=`<div class="question-header"><span class="question-number">Q${idx+1}</span><div class="question-actions"><button class="icon-btn ${fav?'active':''}" onclick="toggleFavorite('${q.id}')">💚</button><button class="icon-btn" onclick="toggleQuestionLocation()">${theme().icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${typeof renderRemoveWrongBtn === 'function' ? renderRemoveWrongBtn() : ''}`;
+      el('question-container').innerHTML = `<div class="question-header"><span class="question-number">Q${idx+1}</span><div class="question-actions"><button class="icon-btn ${fav?'active':''}" onclick="toggleFavorite('${q.id}')">💚</button><button class="icon-btn" onclick="toggleQuestionLocation()">${theme().icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${typeof renderRemoveWrongBtn === 'function' ? renderRemoveWrongBtn() : ''}`;
       el('question-container').classList.add('exam-content-ltr');
     }
+
     renderExamNav();
   };
 
