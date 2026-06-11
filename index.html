@@ -48,10 +48,11 @@
       <div class="screen-header statistics-screen-header">
         <button class="btn-back" onclick="closeStatisticsPage()">← رجوع</button>
         <h3 id="statistics-screen-title">📊 الإحصائيات</h3>
-        <div class="panel-header-actions">
+                <div class="panel-header-actions">
           <button class="btn-secondary btn-mini" onclick="openStatsExclusionDialog()">⚙️</button>
-          <button class="btn-danger btn-mini" onclick="openResetModal()">🗑️ إعادة ضبط</button>
+          <button class="btn-secondary btn-mini btn-home-global" onclick="goHome()">🏠 Home</button>
         </div>
+
       </div>
       <div id="global-stats-container" class="stats-summary-grid"></div>
       <div id="subjects-stats-list" class="subject-stats-list"></div>
@@ -67,7 +68,7 @@
       <div class="modal-card statistics-modal" style="max-width: 90%; width: 560px;">
         <div class="panel-header modal-header"><h3>⚙️ إعدادات الإحصائيات</h3><button class="btn-close" onclick="closeStatsExclusionDialog()">✕</button></div>
         <div class="exclusion-section"><strong>المواد المستبعدة</strong><div id="subject-exclusions-list" class="exclusion-checkboxes"></div></div>
-        <div class="exclusion-section"><strong>الأقسام المستبعدة</strong><div id="section-exclusions-list" class="exclusion-checkboxes"><label><input type="checkbox" id="exclude-lectures"> المحاضرات (Lectures)</label><label><input type="checkbox" id="exclude-ai"> الذكاء الاصطناعي (AI)</label></div></div>
+             <div class="exclusion-section"><strong>الأقسام المستبعدة</strong><div id="section-exclusions-list" class="exclusion-checkboxes"><label><input type="checkbox" id="exclude-lectures"> المحاضرات (Lectures)</label><label><input type="checkbox" id="exclude-ai"> الذكاء الصناعي (AI)</label></div></div>
         <div class="dialog-actions"><button class="btn-secondary" onclick="closeStatsExclusionDialog()">إغلاق</button><button class="btn-primary" onclick="applyStatsExclusions()">✅ Apply</button></div>
       </div>
     </div>
