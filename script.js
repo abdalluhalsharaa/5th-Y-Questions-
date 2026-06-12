@@ -76,7 +76,23 @@ function getSubjectColor(subjectName){ const darkPalette=['#93c5fd','#86efac','#
 function formatHistorySubLabel(item){ if(!item || !item.groups || !item.groups.length) return item.sourceLabel || 'عام'; return item.groups.map(g=>g.type==='ai' ? `${g.name} (AI)` : g.name).join('، '); }
 function calculateLectureChecklistStats(subject){ const lectures=subject.lectures || []; const total=lectures.length; const completed=lectures.reduce((sum,g)=>sum + (state.checklistCompleted[g.id] ? 1 : 0), 0); const remaining=Math.max(0,total-completed); return { total, completed, remaining, percentage: total?Math.round((completed/total)*100):0 }; }
 function getPromptLabelForGroup(group){ if(group.type==='year') return 'Batch'; if(group.type==='ai') return 'AI'; return 'Lecture'; }
-function getStatsSectionPalette(type){ const dark = isDarkTheme(); const map = dark ? { lecture:{accent:'#f8fafc', bg:'rgba(255,255,255,0.10)'}, year:{accent:'#fde68a', bg:'rgba(253,230,138,0.12)'}, ai:{accent:'#86efac', bg:'rgba(134,239,172,0.12)'} } : { lecture:{accent:'#1d4ed8', bg:'rgba(29,78,216,0.08)'}, year:{accent:'#92400e', bg:'rgba(245,158,11,0.10)'}, ai:{accent:'#047857', bg:'rgba(16,185,129,0.10)'} }; return map[type] || (dark ? {accent:'#f8fafc', bg:'rgba(255,255,255,0.10)'} : {accent:'#1d4ed8', bg:'rgba(29,78,216,0.08)'}); }
+function getStatsSectionPalette(type){
+  const dark = isDarkTheme();
+  const map = dark
+    ? {
+        lecture:{ accent:'#f8fafc', bg:'rgba(255,255,255,0.10)', text:'#0f172a', soft:'rgba(248,250,252,0.18)' },
+        year:{ accent:'#fde68a', bg:'rgba(253,230,138,0.12)', text:'#3b2f00', soft:'rgba(253,230,138,0.22)' },
+        ai:{ accent:'#86efac', bg:'rgba(134,239,172,0.12)', text:'#052e16', soft:'rgba(134,239,172,0.20)' }
+      }
+    : {
+        lecture:{ accent:'#1d4ed8', bg:'rgba(29,78,216,0.08)', text:'#ffffff', soft:'rgba(29,78,216,0.16)' },
+        year:{ accent:'#92400e', bg:'rgba(245,158,11,0.10)', text:'#ffffff', soft:'rgba(245,158,11,0.18)' },
+        ai:{ accent:'#047857', bg:'rgba(16,185,129,0.10)', text:'#ffffff', soft:'rgba(16,185,129,0.18)' }
+      };
+  return map[type] || (dark
+    ? { accent:'#f8fafc', bg:'rgba(255,255,255,0.10)', text:'#0f172a', soft:'rgba(248,250,252,0.18)' }
+    : { accent:'#1d4ed8', bg:'rgba(29,78,216,0.08)', text:'#ffffff', soft:'rgba(29,78,216,0.16)' });
+}
 function cleanOptionDisplay(text){ return String(text||'').replace(/\u200C+/g,''); }
 function getFormattedCurrentCorrectAnswer(q){ const idx = getCorrectIndex(q); if(idx < 0) return cleanOptionDisplay(getCorrectAnswerText(q) || q.correctAnswerText || q.correctAnswer || ''); return `${LETTERS[idx]}) ${cleanOptionDisplay(q.options[idx])}`; }
 
@@ -249,25 +265,22 @@ function renderSectionAnalyticsCard(subject, type, label, icon, analytics){
   const rowsHtml = analytics.rows.length ? analytics.rows.map(row => `
     <div class="stats-lecture-row" style="--subject-color:${getSubjectColor(subject.name)}">
       <div class="stats-lecture-name">${escapeHtml(row.group.name)}</div>
-      <div class="stats-lecture-meta">
-        <div class="stats-meta-pill">الإجمالي ${row.total}</div>
-        <div class="stats-meta-pill">المحلول ${row.answered}</div>
-        <div class="stats-meta-pill">${row.percentage}%</div>
+      <div class="stats-lecture-count" dir="rtl">${row.answered} من ${row.total}</div>
+      <div class="stats-lecture-progress-wrap">
+        <div class="progress-bar"><span style="width:${row.percentage}%"></span></div>
+        <div class="stats-lecture-percentage">${row.percentage}٪</div>
       </div>
-      <div class="progress-bar"><span style="width:${row.percentage}%"></span></div>
     </div>
   `).join('') : '<div class="stats-empty-note">لا توجد عناصر ضمن هذا القسم.</div>';
+
   return `
-    <div class="stats-section-card stats-section-accent" style="--section-accent:${palette.accent};--section-accent-bg:${palette.bg};">
-      <div class="stats-section-head">
-        <div class="stats-section-title">${icon} ${label}</div>
-        <div class="stats-meta-pill">${analytics.total} سؤال</div>
+    <div class="stats-section-card stats-section-accent" style="--section-accent:${palette.accent};--section-accent-bg:${palette.bg};--section-text:${palette.text};--section-soft:${palette.soft};">
+      <div class="stats-section-banner">${icon} ${label}</div>
+      <div class="stats-section-summary" dir="rtl">${analytics.answered} من ${analytics.total}</div>
+      <div class="stats-section-progress-wrap">
+        <div class="progress-bar"><span style="width:${analytics.percentage}%"></span></div>
+        <div class="stats-section-percentage">${analytics.percentage}٪</div>
       </div>
-      <div class="stats-section-meta">
-        <div class="stats-meta-pill">${analytics.remaining} متبقٍّ</div>
-        <div class="stats-meta-pill">نسبة الإنجاز ${analytics.percentage}%</div>
-      </div>
-      <div class="progress-bar" style="margin-top:10px;"><span style="width:${analytics.percentage}%"></span></div>
       <div class="stats-lecture-list">${rowsHtml}</div>
     </div>
   `;
