@@ -40,13 +40,12 @@
 .stats-lecture-name{font-size:1rem;font-weight:800;color:color-mix(in srgb,var(--section-accent) 40%,var(--text-light) 60%);margin-bottom:8px}
 .stats-lecture-line{display:flex;align-items:center;gap:10px;flex-wrap:nowrap}
 .stats-lecture-count{flex:0 0 auto;font-weight:900;color:color-mix(in srgb,var(--section-accent) 52%,var(--text-light) 48%);text-align:right;direction:rtl;unicode-bidi:isolate;font-variant-numeric:tabular-nums;white-space:nowrap;margin-inline-end:8px}
-[data-theme="pirates"] .stats-section-banner{background:#6b3f12;color:#fff7e3}
 [data-theme="pirates"] .stats-section-count,
-[data-theme="pirates"] .stats-section-percentage{color:#3a1b03}
-[data-theme="pirates"] .stats-lecture-name{color:#140a02;font-weight:900}
+[data-theme="pirates"] .stats-section-percentage{font-weight:900}
+[data-theme="pirates"] .stats-lecture-name{font-weight:900}
 [data-theme="pirates"] .stats-lecture-count,
-[data-theme="pirates"] .stats-lecture-percentage{color:#3a1b03;font-weight:900}
-[data-theme="pirates"] .stats-lecture-row{border-bottom-color:rgba(107,63,18,.45)}
+[data-theme="pirates"] .stats-lecture-percentage{font-weight:900}
+[data-theme="pirates"] .stats-lecture-row{border-bottom-color:color-mix(in srgb,var(--section-accent) 40%,rgba(0,0,0,.20) 60%)}
 @media (max-width:767px){
   .stats-summary-head{align-items:flex-start}
   .stats-section-topline,.stats-lecture-line{gap:8px}
