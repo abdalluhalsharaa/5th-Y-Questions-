@@ -162,7 +162,8 @@
     if(q.batchName) removeProgressIdsFromKey('year:'+q.subjectName+'/'+q.batchName, ids);
   }
 
-  function rerenderAfterChecklistRelatedChange(){
+    function rerenderAfterChecklistRelatedChange(){
+    try{ syncAutoCompletedLectures(); }catch(e){}
     try{ saveChecklistStore(); }catch(e){}
     try{ saveProgressStore(); }catch(e){}
     if(typeof renderChecklist === 'function') renderChecklist();
@@ -174,29 +175,48 @@
       try{ renderSelectionScreenWithEnhancements(); }catch(e){}
     }
   }
-  function syncAutoCompletedLectures(){
+    function syncAutoCompletedLectures(){
     let changed = false;
+
+    function syncGroup(subject, group, sectionType, progressKey){
+      const total = Array.isArray(group.questions) ? group.questions.length : 0;
+      const answered = getAnsweredCountForKey(progressKey);
+      const completed = total > 0 && answered >= total;
+
+      if(completed){
+        if(!state.checklistCompleted[group.id]){
+          state.checklistCompleted[group.id] = true;
+          changed = true;
+        }
+
+        const key = getGroupOrderKey(subject.name, sectionType);
+        const currentOrder = Array.isArray(state.groupPreferences[key]) ? state.groupPreferences[key].slice() : getOriginalOrderIds(subject.name, sectionType);
+        const isLast = currentOrder.length > 0 && currentOrder[currentOrder.length - 1] === group.id;
+
+        if(!isLast){
+          moveGroupToBottomByInfo(subject.name, sectionType, group.id);
+          changed = true;
+        }
+      } else {
+        if(state.checklistCompleted[group.id]){
+          delete state.checklistCompleted[group.id];
+          changed = true;
+        }
+
+        const before = JSON.stringify(Array.isArray(state.groupPreferences[getGroupOrderKey(subject.name, sectionType)]) ? state.groupPreferences[getGroupOrderKey(subject.name, sectionType)] : []);
+        restoreGroupToOriginalPosition(subject.name, sectionType, group.id);
+        const after = JSON.stringify(Array.isArray(state.groupPreferences[getGroupOrderKey(subject.name, sectionType)]) ? state.groupPreferences[getGroupOrderKey(subject.name, sectionType)] : []);
+        if(before !== after) changed = true;
+      }
+    }
 
     for(const subject of (state.subjects || [])){
       for(const group of (subject.lectures || [])){
-        const total = (group.questions || []).length;
-        const answered = getAnsweredCountForKey(`lecture:${subject.name}/${group.name}`);
+        syncGroup(subject, group, 'lectures', `lecture:${subject.name}/${group.name}`);
+      }
 
-        if(total > 0 && answered >= total){
-          if(!state.checklistCompleted[group.id]){
-            state.checklistCompleted[group.id] = true;
-            changed = true;
-          }
-
-          const key = getGroupOrderKey(subject.name, 'lectures');
-          const currentOrder = Array.isArray(state.groupPreferences[key]) ? state.groupPreferences[key].slice() : getOriginalOrderIds(subject.name, 'lectures');
-          const isLast = currentOrder.length > 0 && currentOrder[currentOrder.length - 1] === group.id;
-
-          if(!isLast){
-            moveGroupToBottomByInfo(subject.name, 'lectures', group.id);
-            changed = true;
-          }
-        }
+      for(const group of (subject.years || [])){
+        syncGroup(subject, group, 'years', `year:${subject.name}/${group.name}`);
       }
     }
 
@@ -206,7 +226,7 @@
     }
 
     return changed;
-  }
+  }  
   function setGroupCompleted(groupId, completed, opts){
     const options = Object.assign({ moveBottom:false, countAsAnswered:false, resetProgress:false }, opts || {});
     const found = findGroupById(groupId);
@@ -574,6 +594,11 @@
       }
     };
   })(typeof changeTheme === 'function' ? changeTheme : null);
+    buildCategoryCard = function(type, title, badgeText, itemCount, totalQuestions, enabled){
+    if(!enabled) return '';
+    const countLabel = type === 'years' ? 'الدُفع السابقة' : 'المحاضرات';
+    return `<button class="category-card" onclick="openSubjectCategory('${type}')"><span class="category-badge">${badgeText}</span><div class="category-meta"><div><span>${countLabel}</span><strong>${itemCount}</strong></div><div><span>الأسئلة</span><strong>${totalQuestions}</strong></div></div></button>`;
+  };
   const __origSaveProgressForAutoComplete = typeof saveProgress === 'function' ? saveProgress : null;
   saveProgress = function(){
     if(__origSaveProgressForAutoComplete) __origSaveProgressForAutoComplete();
@@ -586,6 +611,43 @@
     if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
   };
   prepareQuestionForExam = function(question){
+  	  const __origExecuteResetStatisticsPatch = typeof executeResetStatistics === 'function' ? executeResetStatistics : null;
+  executeResetStatistics = function(){
+    if(__origExecuteResetStatisticsPatch) __origExecuteResetStatisticsPatch();
+    if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
+    else{
+      try{ saveChecklistStore(); }catch(e){}
+      try{ saveGroupPreferences(); }catch(e){}
+      if(typeof renderChecklist === 'function') renderChecklist();
+      if(typeof renderChecklistSubject === 'function' && el('checklist-subject-screen') && el('checklist-subject-screen').classList.contains('active')) renderChecklistSubject();
+      if(typeof renderSubjects === 'function' && state.browseMode === 'all') renderSubjects();
+      if(typeof updateStatisticsIfOpen === 'function') updateStatisticsIfOpen();
+      if(typeof renderMemories === 'function') renderMemories();
+      if(shouldEnhanceSelectionScreen() && el('selection-screen') && el('selection-screen').classList.contains('active')){
+        try{ renderSelectionScreenWithEnhancements(); }catch(e){}
+      }
+    }
+  };
+
+  const __origResetProgressFullPatch = typeof resetProgressFull === 'function' ? resetProgressFull : null;
+  resetProgressFull = function(){
+    if(__origResetProgressFullPatch) __origResetProgressFullPatch();
+    setTimeout(() => {
+      if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
+      else{
+        try{ saveChecklistStore(); }catch(e){}
+        try{ saveGroupPreferences(); }catch(e){}
+        if(typeof renderChecklist === 'function') renderChecklist();
+        if(typeof renderChecklistSubject === 'function' && el('checklist-subject-screen') && el('checklist-subject-screen').classList.contains('active')) renderChecklistSubject();
+        if(typeof renderSubjects === 'function' && state.browseMode === 'all') renderSubjects();
+        if(typeof updateStatisticsIfOpen === 'function') updateStatisticsIfOpen();
+        if(typeof renderMemories === 'function') renderMemories();
+        if(shouldEnhanceSelectionScreen() && el('selection-screen') && el('selection-screen').classList.contains('active')){
+          try{ renderSelectionScreenWithEnhancements(); }catch(e){}
+        }
+      }
+    }, 0);
+  };
     const clone = JSON.parse(JSON.stringify(question));
     const baseOptions = (clone.options || []).map(opt => stripOptionPrefix(opt));
     clone.originalOptions = baseOptions.slice();
@@ -930,7 +992,389 @@
       soundSelectExam.addEventListener('touchstart', () => { state.audioUnlocked = true; }, { passive:true });
     }
   }
+  function isMemoryDarkSingleLineTheme(){
+    const themeName = (state.settings && state.settings.theme) ? state.settings.theme : 'default';
+    const isDefaultDark = themeName === 'default' && !!state.settings.darkMode;
+    return themeName === 'castle' || themeName === 'space' || themeName === 'lab' || isDefaultDark;
+  }
 
+  function getMemorySingleLineColor(){
+    return isMemoryDarkSingleLineTheme() ? '#ffffff' : '#000000';
+  }
+
+  function getMemoryCanvasTextColor(){
+    return isMemoryDarkSingleLineTheme() || isDarkTheme() ? '#e5eefb' : '#475569';
+  }
+
+  function getMemoryCanvasGridColor(){
+    return isMemoryDarkSingleLineTheme() || isDarkTheme() ? 'rgba(148,163,184,.28)' : 'rgba(148,163,184,.35)';
+  }
+
+  function getMemoryCanvasAxisColor(){
+    return isMemoryDarkSingleLineTheme() || isDarkTheme() ? 'rgba(226,232,240,.72)' : 'rgba(100,116,139,.9)';
+  }
+
+  function getMemoryOutlineColor(){
+    return isMemoryDarkSingleLineTheme() || isDarkTheme() ? 'rgba(15,23,42,.92)' : 'rgba(255,255,255,.94)';
+  }
+
+  function getPatchStartOfDay(date){
+    const d = new Date(date);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+
+  function getPatchLocalDateKey(date){
+    const d = new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function addPatchDays(date, amount){
+    const d = new Date(date);
+    d.setDate(d.getDate() + amount);
+    return d;
+  }
+
+  function getPatchStartOfWeek(date){
+    const d = getPatchStartOfDay(date);
+    const day = d.getDay();
+    d.setDate(d.getDate() - day);
+    return d;
+  }
+
+  function getPatchEndOfWeek(date){
+    const d = getPatchStartOfWeek(date);
+    d.setDate(d.getDate() + 6);
+    d.setHours(23,59,59,999);
+    return d;
+  }
+
+  function getPatchStartOfMonth(date){
+    const d = new Date(date.getFullYear(), date.getMonth(), 1);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+
+  function getPatchEndOfMonth(date){
+    const d = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    d.setHours(23,59,59,999);
+    return d;
+  }
+
+  function getPatchStartOfYear(date){
+    const d = new Date(date.getFullYear(), 0, 1);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+
+  function getPatchEndOfYear(date){
+    const d = new Date(date.getFullYear(), 11, 31);
+    d.setHours(23,59,59,999);
+    return d;
+  }
+
+  function getPatchMemoryRange(period, offset){
+    const now = new Date();
+
+    if(period === 'weekly'){
+      const anchor = addPatchDays(now, (offset || 0) * 7);
+      const start = getPatchStartOfWeek(anchor);
+      const end = getPatchEndOfWeek(anchor);
+      return {
+        start,
+        end,
+        caption: `من ${start.toLocaleDateString('ar-EG')} إلى ${end.toLocaleDateString('ar-EG')}`
+      };
+    }
+
+    if(period === 'monthly'){
+      const anchor = new Date(now.getFullYear(), now.getMonth() + (offset || 0), 1);
+      const start = getPatchStartOfMonth(anchor);
+      const end = getPatchEndOfMonth(anchor);
+      return {
+        start,
+        end,
+        caption: `من ${start.toLocaleDateString('ar-EG')} إلى ${end.toLocaleDateString('ar-EG')}`
+      };
+    }
+
+    const anchor = new Date(now.getFullYear() + (offset || 0), 0, 1);
+    const start = getPatchStartOfYear(anchor);
+    const end = getPatchEndOfYear(anchor);
+    return {
+      start,
+      end,
+      caption: `من ${start.toLocaleDateString('ar-EG')} إلى ${end.toLocaleDateString('ar-EG')}`
+    };
+  }
+
+  aggregateMemorySeries = function(period, detailed, selectedSubjects, offset){
+    const entries = [];
+
+    Object.entries(state.questionsFirstSeen || {}).forEach(([qid, info]) => {
+      if(!info || typeof info !== 'object') return;
+
+      const subjectName = info.subjectName || 'غير معروف';
+
+      if(Array.isArray(info.days) && info.days.length){
+        info.days.forEach(dayKey => {
+          if(!dayKey) return;
+          const ts = new Date(`${dayKey}T12:00:00`).getTime();
+          if(Number.isFinite(ts)) entries.push({ qid, ts, subjectName });
+        });
+        return;
+      }
+
+      const legacyTs = Number(info.ts || 0);
+      if(legacyTs > 0) entries.push({ qid, ts: legacyTs, subjectName });
+    });
+
+    entries.sort((a,b) => a.ts - b.ts);
+
+    const range = getPatchMemoryRange(period, offset || 0);
+    const labels = [];
+    const buckets = [];
+
+    if(period === 'weekly'){
+      for(let i = 0; i < 7; i++){
+        const d = addPatchDays(range.start, i);
+        buckets.push(getPatchLocalDateKey(d));
+        labels.push(d.toLocaleDateString('ar-EG', { weekday: 'short', day: 'numeric' }));
+      }
+    } else if(period === 'monthly'){
+      const days = range.end.getDate();
+      for(let i = 1; i <= days; i++){
+        const d = new Date(range.start.getFullYear(), range.start.getMonth(), i);
+        buckets.push(getPatchLocalDateKey(d));
+        labels.push(String(i));
+      }
+    } else {
+      for(let i = 0; i < 12; i++){
+        const d = new Date(range.start.getFullYear(), i, 1);
+        buckets.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        labels.push(d.toLocaleDateString('ar-EG', { month: 'short' }));
+      }
+    }
+
+    function getBucketKey(ts){
+      const d = new Date(ts);
+      if(period === 'yearly') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return getPatchLocalDateKey(d);
+    }
+
+    const startTs = range.start.getTime();
+    const endTs = range.end.getTime();
+
+    const filteredEntries = entries.filter(e => e.ts >= startTs && e.ts <= endTs);
+
+    if(!detailed){
+      const data = buckets.map(key => filteredEntries.filter(e => getBucketKey(e.ts) === key).length);
+      return {
+        labels,
+        series: [{ name: 'كل المواد', data, color: getMemorySingleLineColor() }],
+        caption: range.caption
+      };
+    }
+
+    const subjects = selectedSubjects && selectedSubjects.length
+      ? selectedSubjects.slice()
+      : Array.from(new Set(filteredEntries.map(e => e.subjectName))).sort();
+
+    const series = subjects.map(subject => ({
+      name: subject,
+      color: getSubjectColor(subject),
+      data: buckets.map(key => filteredEntries.filter(e => e.subjectName === subject && getBucketKey(e.ts) === key).length)
+    }));
+
+    return { labels, series, caption: range.caption };
+  };
+
+  drawMemoriesChart = function(canvas, labels, series){
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(255,255,255,0)';
+    ctx.fillRect(0, 0, w, h);
+
+    const safeLabels = Array.isArray(labels) ? labels : [];
+    const safeSeries = Array.isArray(series) && series.length
+      ? series
+      : [{ name:'كل المواد', data: safeLabels.map(() => 0), color: getMemorySingleLineColor() }];
+
+    const left = 70;
+    const right = 20;
+    const top = 22;
+    const bottom = 74;
+    const plotW = w - left - right;
+    const plotH = h - top - bottom;
+
+    const maxData = Math.max(0, ...safeSeries.flatMap(s => Array.isArray(s.data) ? s.data : [0]));
+    const stepValue = maxData <= 6 ? 1 : Math.max(1, Math.ceil(maxData / 6));
+    const displayMax = Math.max(stepValue, Math.ceil(Math.max(maxData, 1) / stepValue) * stepValue);
+
+    for(let value = 0; value <= displayMax; value += stepValue){
+      const ratio = value / displayMax;
+      const y = Math.round(h - bottom - (ratio * plotH)) + 0.5;
+
+      ctx.strokeStyle = getMemoryCanvasGridColor();
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(w - right, y);
+      ctx.stroke();
+
+      ctx.fillStyle = getMemoryCanvasTextColor();
+      ctx.font = '12px Inter';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(value), left - 10, y);
+    }
+
+    ctx.strokeStyle = getMemoryCanvasAxisColor();
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, h - bottom);
+    ctx.lineTo(w - right, h - bottom);
+    ctx.stroke();
+
+    const step = safeLabels.length > 1 ? plotW / (safeLabels.length - 1) : plotW;
+
+    safeLabels.forEach((lab, i) => {
+      const x = Math.round(left + step * i);
+      ctx.save();
+      ctx.translate(x, h - bottom + 20);
+      ctx.rotate(-0.35);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = getMemoryCanvasTextColor();
+      ctx.font = '12px Inter';
+      ctx.fillText(lab, 0, 0);
+      ctx.restore();
+    });
+
+    safeSeries.forEach((s) => {
+      const points = (s.data || []).map((value, i) => ({
+        x: Math.round(left + step * i),
+        y: Math.round(h - bottom - ((value / displayMax) * plotH)),
+        value
+      }));
+
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      ctx.strokeStyle = getMemoryOutlineColor();
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      points.forEach((point, i) => {
+        if(i === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+      });
+      ctx.stroke();
+
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      points.forEach((point, i) => {
+        if(i === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = s.color;
+      points.forEach(point => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    });
+
+    const legendY = h - 18;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    safeSeries.forEach((s, idx) => {
+      const x = left + idx * 140;
+      ctx.fillStyle = s.color;
+      ctx.fillRect(x, legendY - 6, 18, 4);
+      ctx.fillStyle = getMemoryCanvasTextColor();
+      ctx.font = '12px Inter';
+      ctx.fillText(s.name, x + 24, legendY - 4);
+    });
+  };
+
+  renderMemories = function(){
+    if(!el('memories-screen')) return;
+    if(!state.memoryOffsets) state.memoryOffsets = { weekly: 0, monthly: 0, yearly: 0 };
+
+    const subjects = sortSubjects(state.subjects).map(s => s.name);
+    const filters = el('memory-subject-filters');
+    const previousSelected = Array.from(document.querySelectorAll('#memory-subject-filters input:checked')).map(x => x.value);
+
+    if(filters){
+      const selection = previousSelected.length ? previousSelected : subjects.slice();
+      filters.innerHTML = subjects.length
+        ? subjects.map(name => `<label class="memory-subject-chip"><input type="checkbox" value="${escapeAttribute(name)}" ${selection.includes(name) ? 'checked' : ''} onchange="renderMemories()"> <span>${escapeHtml(name)}</span></label>`).join('')
+        : '<div class="stats-empty-note">لا توجد مواد بعد.</div>';
+    }
+
+    const historyFilter = el('memories-history-filter');
+    if(historyFilter){
+      const currentValue = historyFilter.value || 'all';
+      historyFilter.innerHTML = '<option value="all">كل المواد</option>' + subjects.map(name => `<option value="${escapeAttribute(name)}">${escapeHtml(name)}</option>`).join('');
+      historyFilter.value = subjects.includes(currentValue) ? currentValue : 'all';
+    }
+
+    const period = el('memory-period') ? el('memory-period').value : 'weekly';
+    const mode = el('memory-view-mode') ? el('memory-view-mode').value : 'all';
+    const selectedSubjects = Array.from(document.querySelectorAll('#memory-subject-filters input:checked')).map(x => x.value);
+    const offset = Number(state.memoryOffsets[period] || 0);
+
+    const data = aggregateMemorySeries(period, mode === 'detailed', selectedSubjects, offset);
+
+    if(el('memory-period-caption')) el('memory-period-caption').textContent = data.caption || '';
+
+    const canvas = el('memories-chart');
+    if(canvas) drawMemoriesChart(canvas, data.labels, data.series);
+
+    const prevBtn = el('memory-prev-btn');
+    const nextBtn = el('memory-next-btn');
+
+    if(prevBtn) prevBtn.disabled = false;
+    if(nextBtn) nextBtn.disabled = offset >= 0;
+
+    const totalUnique = Object.keys(state.questionsFirstSeen || {}).length;
+    const totalTime = state.examHistory.reduce((sum, e) => sum + (e.durationMs || 0), 0);
+    const summary = el('memories-time-summary');
+
+    if(summary){
+      summary.innerHTML = `<div class="progress-card"><h4>أول دخول</h4><p><strong>${formatDateTime(state.firstVisit)}</strong></p></div><div class="progress-card"><h4>عدد الأسئلة الكلي (المُجاب عنها)</h4><p><strong>${totalUnique}</strong></p></div><div class="progress-card"><h4>الوقت الكلي بالامتحانات</h4><p><strong>${formatDuration(totalTime)}</strong></p></div>`;
+    }
+
+    const historyList = el('memories-history-list');
+    if(historyList){
+      const history = getFilteredExamHistory();
+      historyList.innerHTML = history.length
+        ? history.map(exam => `<div class="memory-history-item" style="--subject-color:${getSubjectColor(exam.subjectName || 'Unknown Subject')}"><div class="history-subject">${escapeHtml(exam.subjectName || 'Unknown Subject')}</div><strong>${escapeHtml(formatHistorySubLabel(exam))}</strong><br><small style="color:var(--text-light)">${formatDateTime(exam.endedAt)}<br>${exam.mode === 'exam' ? 'امتحان فعلي' : 'تدريب'} · ${exam.correct}/${exam.total} · ${exam.score}% · ${formatDuration(exam.durationMs || 0)}</small></div>`).join('')
+        : '<div class="stats-empty-note">لا توجد امتحانات مطابقة.</div>';
+    }
+  };
+
+  changeMemoryPeriodOffset = function(delta){
+    if(!state.memoryOffsets) state.memoryOffsets = { weekly: 0, monthly: 0, yearly: 0 };
+    const period = el('memory-period') ? el('memory-period').value : 'weekly';
+    const currentOffset = Number(state.memoryOffsets[period] || 0);
+    const nextOffset = Math.min(0, currentOffset + Number(delta || 0));
+    state.memoryOffsets[period] = nextOffset;
+    renderMemories();
+  };
+
+  window.changeMemoryPeriodOffset = changeMemoryPeriodOffset;
   /* patch styles kept from previous patch and aligned with current files */
   const st = document.createElement('style');
   st.id = 'medical-app-patch-v5-style';
