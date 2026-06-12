@@ -175,7 +175,7 @@
       try{ renderSelectionScreenWithEnhancements(); }catch(e){}
     }
   }
-    function syncAutoCompletedLectures(){
+      function syncAutoCompletedLectures(){
     let changed = false;
 
     function syncGroup(subject, group, sectionType, progressKey){
@@ -203,9 +203,10 @@
           changed = true;
         }
 
-        const before = JSON.stringify(Array.isArray(state.groupPreferences[getGroupOrderKey(subject.name, sectionType)]) ? state.groupPreferences[getGroupOrderKey(subject.name, sectionType)] : []);
+        const prefKey = getGroupOrderKey(subject.name, sectionType);
+        const before = JSON.stringify(Array.isArray(state.groupPreferences[prefKey]) ? state.groupPreferences[prefKey] : []);
         restoreGroupToOriginalPosition(subject.name, sectionType, group.id);
-        const after = JSON.stringify(Array.isArray(state.groupPreferences[getGroupOrderKey(subject.name, sectionType)]) ? state.groupPreferences[getGroupOrderKey(subject.name, sectionType)] : []);
+        const after = JSON.stringify(Array.isArray(state.groupPreferences[prefKey]) ? state.groupPreferences[prefKey] : []);
         if(before !== after) changed = true;
       }
     }
@@ -213,6 +214,10 @@
     for(const subject of (state.subjects || [])){
       for(const group of (subject.lectures || [])){
         syncGroup(subject, group, 'lectures', `lecture:${subject.name}/${group.name}`);
+      }
+
+      for(const group of (subject.ai || [])){
+        syncGroup(subject, group, 'ai', `ai:${subject.name}/${group.name}`);
       }
 
       for(const group of (subject.years || [])){
@@ -226,7 +231,7 @@
     }
 
     return changed;
-  }  
+  }
   function setGroupCompleted(groupId, completed, opts){
     const options = Object.assign({ moveBottom:false, countAsAnswered:false, resetProgress:false }, opts || {});
     const found = findGroupById(groupId);
@@ -599,7 +604,116 @@
     const countLabel = type === 'years' ? 'الدُفع السابقة' : 'المحاضرات';
     return `<button class="category-card" onclick="openSubjectCategory('${type}')"><span class="category-badge">${badgeText}</span><div class="category-meta"><div><span>${countLabel}</span><strong>${itemCount}</strong></div><div><span>الأسئلة</span><strong>${totalQuestions}</strong></div></div></button>`;
   };
-  const __origSaveProgressForAutoComplete = typeof saveProgress === 'function' ? saveProgress : null;
+    function shouldCountYearsOnlyInSubjectSummary(settings){
+    return !!settings && settings.lectures === false && settings.ai === false && settings.years !== false;
+  }
+
+  const __origGetSubjectTotalQuestionsPatch = typeof getSubjectTotalQuestions === 'function' ? getSubjectTotalQuestions : null;
+  const __origGetSubjectAnsweredCountPatch = typeof getSubjectAnsweredCount === 'function' ? getSubjectAnsweredCount : null;
+
+  getSubjectTotalQuestions = function(subject, options = {}){
+    const { scope = 'overview', respectVisibilitySettings = false } = options;
+
+    if(!(scope === 'subject' && respectVisibilitySettings)){
+      return __origGetSubjectTotalQuestionsPatch ? __origGetSubjectTotalQuestionsPatch(subject, options) : 0;
+    }
+
+    const settings = getSubjectVisibilitySettings(subject.id);
+    const includeLectures = settings.lectures !== false;
+    const includeAi = settings.ai !== false;
+    const includeYears = shouldCountYearsOnlyInSubjectSummary(settings);
+
+    let total = 0;
+    if(includeLectures) total += (subject.lectures || []).reduce((sum, g) => sum + ((g.questions || []).length), 0);
+    if(includeAi) total += (subject.ai || []).reduce((sum, g) => sum + ((g.questions || []).length), 0);
+    if(includeYears) total += (subject.years || []).reduce((sum, g) => sum + ((g.questions || []).length), 0);
+
+    return total;
+  };
+
+  getSubjectAnsweredCount = function(subject, options = {}){
+    const { scope = 'overview', respectVisibilitySettings = false } = options;
+
+    if(!(scope === 'subject' && respectVisibilitySettings)){
+      return __origGetSubjectAnsweredCountPatch ? __origGetSubjectAnsweredCountPatch(subject, options) : 0;
+    }
+
+    const settings = getSubjectVisibilitySettings(subject.id);
+    const answeredSet = new Set();
+
+    function addKey(key){
+      const entry = state.progress[key];
+      if(entry && Array.isArray(entry.questionIds)){
+        entry.questionIds.forEach(id => answeredSet.add(id));
+      }
+    }
+
+    if(settings.lectures !== false){
+      (subject.lectures || []).forEach(g => addKey(`lecture:${subject.name}/${g.name}`));
+    }
+
+    if(settings.ai !== false){
+      (subject.ai || []).forEach(g => addKey(`ai:${subject.name}/${g.name}`));
+    }
+
+    if(shouldCountYearsOnlyInSubjectSummary(settings)){
+      (subject.years || []).forEach(g => addKey(`year:${subject.name}/${g.name}`));
+    }
+
+    return answeredSet.size;
+  };
+    const __origRenderSubjectStatsPatch = typeof renderSubjectStats === 'function' ? renderSubjectStats : null;
+
+  renderSubjectStats = function(){
+    const subject = state.currentSubject;
+    if(!subject) return;
+
+    const settings = getSubjectVisibilitySettings(subject.id);
+    const t = theme();
+
+    if(el('subject-stats-name')) el('subject-stats-name').textContent = subject.name;
+
+    const total = getSubjectTotalQuestions(subject, { scope:'subject', respectVisibilitySettings:true });
+    const answered = getSubjectAnsweredCount(subject, { scope:'subject', respectVisibilitySettings:true });
+    const remaining = Math.max(0, total - answered);
+    const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
+
+    if(el('subject-stats-summary')){
+      el('subject-stats-summary').innerHTML = `
+        <div class="progress-card">
+          <div class="stats-summary-head">
+            <h4>${t.icons.subject} ${escapeHtml(subject.name)}</h4>
+          </div>
+          <p><span>إجمالي الأسئلة</span><strong>${total}</strong></p>
+          <p><span>المنجز</span><strong>${answered}</strong></p>
+          <p><span>المتبقي</span><strong>${remaining}</strong></p>
+          <div class="stats-row stats-percentage-row"><span>نسبة الإنجاز</span><strong>${pct}%</strong></div>
+          <div class="progress-bar"><span style="width:${pct}%"></span></div>
+        </div>
+      `;
+    }
+
+    const sections = [];
+
+    if(subject.lectures.length && settings.lectures !== false){
+      sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
+    }
+
+    if(subject.ai.length && settings.ai !== false){
+      sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الصناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
+    }
+
+    if(subject.years.length && shouldCountYearsOnlyInSubjectSummary(settings)){
+      sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
+    }
+
+    if(el('subject-stats-sections')){
+      el('subject-stats-sections').innerHTML = sections.length
+        ? sections.join('')
+        : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حاليًا.</p></div>';
+    }
+  };
+    const __origSaveProgressForAutoComplete = typeof saveProgress === 'function' ? saveProgress : null;
   saveProgress = function(){
     if(__origSaveProgressForAutoComplete) __origSaveProgressForAutoComplete();
     if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
@@ -610,28 +724,11 @@
     if(__origLoadDataForAutoComplete) await __origLoadDataForAutoComplete();
     if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
   };
-  prepareQuestionForExam = function(question){
-  	  const __origExecuteResetStatisticsPatch = typeof executeResetStatistics === 'function' ? executeResetStatistics : null;
+
+  const __origExecuteResetStatisticsPatch = typeof executeResetStatistics === 'function' ? executeResetStatistics : null;
   executeResetStatistics = function(){
     if(__origExecuteResetStatisticsPatch) __origExecuteResetStatisticsPatch();
-    if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
-    else{
-      try{ saveChecklistStore(); }catch(e){}
-      try{ saveGroupPreferences(); }catch(e){}
-      if(typeof renderChecklist === 'function') renderChecklist();
-      if(typeof renderChecklistSubject === 'function' && el('checklist-subject-screen') && el('checklist-subject-screen').classList.contains('active')) renderChecklistSubject();
-      if(typeof renderSubjects === 'function' && state.browseMode === 'all') renderSubjects();
-      if(typeof updateStatisticsIfOpen === 'function') updateStatisticsIfOpen();
-      if(typeof renderMemories === 'function') renderMemories();
-      if(shouldEnhanceSelectionScreen() && el('selection-screen') && el('selection-screen').classList.contains('active')){
-        try{ renderSelectionScreenWithEnhancements(); }catch(e){}
-      }
-    }
-  };
 
-  const __origResetProgressFullPatch = typeof resetProgressFull === 'function' ? resetProgressFull : null;
-  resetProgressFull = function(){
-    if(__origResetProgressFullPatch) __origResetProgressFullPatch();
     setTimeout(() => {
       if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
       else{
@@ -639,7 +736,7 @@
         try{ saveGroupPreferences(); }catch(e){}
         if(typeof renderChecklist === 'function') renderChecklist();
         if(typeof renderChecklistSubject === 'function' && el('checklist-subject-screen') && el('checklist-subject-screen').classList.contains('active')) renderChecklistSubject();
-        if(typeof renderSubjects === 'function' && state.browseMode === 'all') renderSubjects();
+        if(typeof renderSubjects === 'function') renderSubjects();
         if(typeof updateStatisticsIfOpen === 'function') updateStatisticsIfOpen();
         if(typeof renderMemories === 'function') renderMemories();
         if(shouldEnhanceSelectionScreen() && el('selection-screen') && el('selection-screen').classList.contains('active')){
@@ -648,6 +745,29 @@
       }
     }, 0);
   };
+
+  const __origResetProgressFullPatch = typeof resetProgressFull === 'function' ? resetProgressFull : null;
+  resetProgressFull = function(){
+    if(__origResetProgressFullPatch) __origResetProgressFullPatch();
+
+    setTimeout(() => {
+      if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
+      else{
+        try{ saveChecklistStore(); }catch(e){}
+        try{ saveGroupPreferences(); }catch(e){}
+        if(typeof renderChecklist === 'function') renderChecklist();
+        if(typeof renderChecklistSubject === 'function' && el('checklist-subject-screen') && el('checklist-subject-screen').classList.contains('active')) renderChecklistSubject();
+        if(typeof renderSubjects === 'function') renderSubjects();
+        if(typeof updateStatisticsIfOpen === 'function') updateStatisticsIfOpen();
+        if(typeof renderMemories === 'function') renderMemories();
+        if(shouldEnhanceSelectionScreen() && el('selection-screen') && el('selection-screen').classList.contains('active')){
+          try{ renderSelectionScreenWithEnhancements(); }catch(e){}
+        }
+      }
+    }, 0);
+  };
+
+  prepareQuestionForExam = function(question){
     const clone = JSON.parse(JSON.stringify(question));
     const baseOptions = (clone.options || []).map(opt => stripOptionPrefix(opt));
     clone.originalOptions = baseOptions.slice();
