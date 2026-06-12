@@ -174,7 +174,39 @@
       try{ renderSelectionScreenWithEnhancements(); }catch(e){}
     }
   }
+  function syncAutoCompletedLectures(){
+    let changed = false;
 
+    for(const subject of (state.subjects || [])){
+      for(const group of (subject.lectures || [])){
+        const total = (group.questions || []).length;
+        const answered = getAnsweredCountForKey(`lecture:${subject.name}/${group.name}`);
+
+        if(total > 0 && answered >= total){
+          if(!state.checklistCompleted[group.id]){
+            state.checklistCompleted[group.id] = true;
+            changed = true;
+          }
+
+          const key = getGroupOrderKey(subject.name, 'lectures');
+          const currentOrder = Array.isArray(state.groupPreferences[key]) ? state.groupPreferences[key].slice() : getOriginalOrderIds(subject.name, 'lectures');
+          const isLast = currentOrder.length > 0 && currentOrder[currentOrder.length - 1] === group.id;
+
+          if(!isLast){
+            moveGroupToBottomByInfo(subject.name, 'lectures', group.id);
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if(changed){
+      try{ saveChecklistStore(); }catch(e){}
+      try{ saveGroupPreferences(); }catch(e){}
+    }
+
+    return changed;
+  }
   function setGroupCompleted(groupId, completed, opts){
     const options = Object.assign({ moveBottom:false, countAsAnswered:false, resetProgress:false }, opts || {});
     const found = findGroupById(groupId);
@@ -542,7 +574,17 @@
       }
     };
   })(typeof changeTheme === 'function' ? changeTheme : null);
+  const __origSaveProgressForAutoComplete = typeof saveProgress === 'function' ? saveProgress : null;
+  saveProgress = function(){
+    if(__origSaveProgressForAutoComplete) __origSaveProgressForAutoComplete();
+    if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
+  };
 
+  const __origLoadDataForAutoComplete = typeof loadData === 'function' ? loadData : null;
+  loadData = async function(){
+    if(__origLoadDataForAutoComplete) await __origLoadDataForAutoComplete();
+    if(syncAutoCompletedLectures()) rerenderAfterChecklistRelatedChange();
+  };
   prepareQuestionForExam = function(question){
     const clone = JSON.parse(JSON.stringify(question));
     const baseOptions = (clone.options || []).map(opt => stripOptionPrefix(opt));
