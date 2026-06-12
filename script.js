@@ -246,17 +246,15 @@ function renderSubjectsStatsList(){
 }
 function renderSectionAnalyticsCard(subject, type, label, icon, analytics){
   const palette = getStatsSectionPalette(type);
-  const rowLabel = type==='year' ? 'الدفعة' : (type==='ai' ? 'ملف الذكاء الصناعي' : 'المحاضرة');
   const rowsHtml = analytics.rows.length ? analytics.rows.map(row => `
     <div class="stats-lecture-row" style="--subject-color:${getSubjectColor(subject.name)}">
-      <div><strong>${escapeHtml(row.group.name)}</strong></div>
-      <div class="stats-meta-pill">${row.total} سؤال</div>
-      <div class="stats-meta-pill">${row.remaining} متبقٍّ</div>
-      <div class="stats-meta-pill">${row.percentage}%</div>
-      <div class="stats-lecture-progress">
-        <div class="stats-row"><span>${rowLabel}</span><strong>${Math.max(0,row.total-row.remaining)}/${row.total}</strong></div>
-        <div class="progress-bar"><span style="width:${row.percentage}%"></span></div>
+      <div class="stats-lecture-name">${escapeHtml(row.group.name)}</div>
+      <div class="stats-lecture-meta">
+        <div class="stats-meta-pill">الإجمالي ${row.total}</div>
+        <div class="stats-meta-pill">المحلول ${row.answered}</div>
+        <div class="stats-meta-pill">${row.percentage}%</div>
       </div>
+      <div class="progress-bar"><span style="width:${row.percentage}%"></span></div>
     </div>
   `).join('') : '<div class="stats-empty-note">لا توجد عناصر ضمن هذا القسم.</div>';
   return `
@@ -288,8 +286,8 @@ function renderSubjectStats(){
   const settings = getSubjectVisibilitySettings(subject.id);
   const t = theme();
   if(el('subject-stats-name')) el('subject-stats-name').textContent = subject.name;
-  const total = getSubjectTotalQuestions(subject, { respectVisibilitySettings:true });
-  const answered = getSubjectAnsweredCount(subject, { respectVisibilitySettings:true });
+  const total = getSubjectTotalQuestions(subject, { scope:'subject', respectVisibilitySettings:true });
+  const answered = getSubjectAnsweredCount(subject, { scope:'subject', respectVisibilitySettings:true });
   const remaining = Math.max(0,total-answered);
   const pct = total > 0 ? Math.round((answered/total)*100) : 0;
   if(el('subject-stats-summary')){
