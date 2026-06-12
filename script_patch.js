@@ -703,7 +703,7 @@
       sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الصناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
     }
 
-    if(subject.years.length && shouldCountYearsOnlyInSubjectSummary(settings)){
+    if(subject.years.length && settings.years !== false){
       sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
     }
 
