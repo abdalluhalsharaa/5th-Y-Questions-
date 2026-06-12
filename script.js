@@ -160,22 +160,49 @@ function isSectionExcluded(sectionType){ const map = { lecture: 'lectures', year
 function getSubjectVisibilitySettings(subjectId){ return Object.assign({ lectures:true, years:false, ai:false }, state.subjectStatsSettings[subjectId] || {}); }
 function getSubjectProgressEntryForGroup(group){ return getAnsweredCountForKey(getGroupProgressKey(group.type, group.subjectName, group.name)); }
 function getSubjectTotalQuestions(subject, options = {}){
-  const { respectVisibilitySettings = false } = options;
-  const settings = respectVisibilitySettings ? getSubjectVisibilitySettings(subject.id) : { lectures: true, years: true, ai: true };
+  const { scope = 'overview', respectVisibilitySettings = false } = options;
+  const settings = respectVisibilitySettings ? getSubjectVisibilitySettings(subject.id) : { lectures: true, years: scope === 'subject', ai: true };
+
+  const includeLectures = scope === 'subject'
+    ? settings.lectures !== false
+    : (!isSectionExcluded('lecture') && settings.lectures !== false);
+
+  const includeYears = scope === 'subject'
+    ? settings.years !== false
+    : false;
+
+  const includeAi = scope === 'subject'
+    ? settings.ai !== false
+    : (!isSectionExcluded('ai') && settings.ai !== false);
+
   let total = 0;
-  if(!isSectionExcluded('lecture') && settings.lectures !== false) total += subject.lectures.reduce((s,g)=>s+g.questions.length,0);
-  if(!isSectionExcluded('year') && settings.years !== false) total += subject.years.reduce((s,g)=>s+g.questions.length,0);
-  if(!isSectionExcluded('ai') && settings.ai !== false) total += subject.ai.reduce((s,g)=>s+g.questions.length,0);
+  if(includeLectures) total += subject.lectures.reduce((s,g)=>s+g.questions.length,0);
+  if(includeYears) total += subject.years.reduce((s,g)=>s+g.questions.length,0);
+  if(includeAi) total += subject.ai.reduce((s,g)=>s+g.questions.length,0);
   return total;
 }
 function getSubjectAnsweredCount(subject, options = {}){
-  const { respectVisibilitySettings = false } = options;
+  const { scope = 'overview', respectVisibilitySettings = false } = options;
   const answeredSet = new Set();
   const addKey = (key) => { const entry = state.progress[key]; if(entry && entry.questionIds) entry.questionIds.forEach(id=>answeredSet.add(id)); };
-  const settings = respectVisibilitySettings ? getSubjectVisibilitySettings(subject.id) : { lectures: true, years: true, ai: true };
-  if(!isSectionExcluded('lecture') && settings.lectures !== false) subject.lectures.forEach(g=> addKey(`lecture:${subject.name}/${g.name}`));
-  if(!isSectionExcluded('year') && settings.years !== false) subject.years.forEach(g=> addKey(`year:${subject.name}/${g.name}`));
-  if(!isSectionExcluded('ai') && settings.ai !== false) subject.ai.forEach(g=> addKey(`ai:${subject.name}/${g.name}`));
+  const settings = respectVisibilitySettings ? getSubjectVisibilitySettings(subject.id) : { lectures: true, years: scope === 'subject', ai: true };
+
+  const includeLectures = scope === 'subject'
+    ? settings.lectures !== false
+    : (!isSectionExcluded('lecture') && settings.lectures !== false);
+
+  const includeYears = scope === 'subject'
+    ? settings.years !== false
+    : false;
+
+  const includeAi = scope === 'subject'
+    ? settings.ai !== false
+    : (!isSectionExcluded('ai') && settings.ai !== false);
+
+  if(includeLectures) subject.lectures.forEach(g=> addKey(`lecture:${subject.name}/${g.name}`));
+  if(includeYears) subject.years.forEach(g=> addKey(`year:${subject.name}/${g.name}`));
+  if(includeAi) subject.ai.forEach(g=> addKey(`ai:${subject.name}/${g.name}`));
+
   return answeredSet.size;
 }
 function getGlobalStats(){
@@ -265,21 +292,25 @@ function renderSectionAnalyticsCard(subject, type, label, icon, analytics){
   const rowsHtml = analytics.rows.length ? analytics.rows.map(row => `
     <div class="stats-lecture-row" style="--subject-color:${getSubjectColor(subject.name)}">
       <div class="stats-lecture-name">${escapeHtml(row.group.name)}</div>
-      <div class="stats-lecture-count" dir="rtl">${row.answered} من ${row.total}</div>
-      <div class="stats-lecture-progress-wrap">
-        <div class="progress-bar"><span style="width:${row.percentage}%"></span></div>
-        <div class="stats-lecture-percentage">${row.percentage}٪</div>
+      <div class="stats-lecture-line">
+        <div class="stats-lecture-count" dir="rtl">${row.answered} من ${row.total}</div>
+        <div class="stats-lecture-progress-wrap">
+          <div class="progress-bar"><span style="width:${row.percentage}%"></span></div>
+          <div class="stats-lecture-percentage">${row.percentage}٪</div>
+        </div>
       </div>
     </div>
   `).join('') : '<div class="stats-empty-note">لا توجد عناصر ضمن هذا القسم.</div>';
 
   return `
     <div class="stats-section-card stats-section-accent" style="--section-accent:${palette.accent};--section-accent-bg:${palette.bg};--section-text:${palette.text};--section-soft:${palette.soft};">
-      <div class="stats-section-banner">${icon} ${label}</div>
-      <div class="stats-section-summary" dir="rtl">${analytics.answered} من ${analytics.total}</div>
-      <div class="stats-section-progress-wrap">
-        <div class="progress-bar"><span style="width:${analytics.percentage}%"></span></div>
-        <div class="stats-section-percentage">${analytics.percentage}٪</div>
+      <div class="stats-section-topline">
+        <div class="stats-section-banner">${label}</div>
+        <div class="stats-section-count" dir="rtl">${analytics.answered} من ${analytics.total}</div>
+        <div class="stats-section-progress-wrap">
+          <div class="progress-bar"><span style="width:${analytics.percentage}%"></span></div>
+          <div class="stats-section-percentage">${analytics.percentage}٪</div>
+        </div>
       </div>
       <div class="stats-lecture-list">${rowsHtml}</div>
     </div>
