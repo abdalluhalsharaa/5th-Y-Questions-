@@ -77,6 +77,15 @@ function formatHistorySubLabel(item){ if(!item || !item.groups || !item.groups.l
 function calculateLectureChecklistStats(subject){ const lectures=subject.lectures || []; const total=lectures.length; const completed=lectures.reduce((sum,g)=>sum + (state.checklistCompleted[g.id] ? 1 : 0), 0); const remaining=Math.max(0,total-completed); return { total, completed, remaining, percentage: total?Math.round((completed/total)*100):0 }; }
 function getPromptLabelForGroup(group){ if(group.type==='year') return 'Batch'; if(group.type==='ai') return 'AI'; return 'Lecture'; }
 function getStatsSectionPalette(type){
+  if(state.settings.theme === 'pirates'){
+    const pirateMap = {
+      lecture:{ accent:'#00FF00', bg:'rgba(0,255,0,0.12)', text:'#052e16', soft:'rgba(0,255,0,0.18)' },
+      year:{ accent:'#F7879A', bg:'rgba(247,135,154,0.14)', text:'#3f1020', soft:'rgba(247,135,154,0.20)' },
+      ai:{ accent:'#E6E6FA', bg:'rgba(230,230,250,0.18)', text:'#2b2340', soft:'rgba(230,230,250,0.24)' }
+    };
+    return pirateMap[type] || pirateMap.lecture;
+  }
+
   const dark = isDarkTheme();
   const map = dark
     ? {
@@ -89,6 +98,7 @@ function getStatsSectionPalette(type){
         year:{ accent:'#92400e', bg:'rgba(245,158,11,0.10)', text:'#ffffff', soft:'rgba(245,158,11,0.18)' },
         ai:{ accent:'#047857', bg:'rgba(16,185,129,0.10)', text:'#ffffff', soft:'rgba(16,185,129,0.18)' }
       };
+
   return map[type] || (dark
     ? { accent:'#f8fafc', bg:'rgba(255,255,255,0.10)', text:'#0f172a', soft:'rgba(248,250,252,0.18)' }
     : { accent:'#1d4ed8', bg:'rgba(29,78,216,0.08)', text:'#ffffff', soft:'rgba(29,78,216,0.16)' });
@@ -327,13 +337,17 @@ function closeSubjectStats(){ state.currentSubject = null; showScreen('statistic
 function renderSubjectStats(){
   const subject = state.currentSubject;
   if(!subject) return;
+
   const settings = getSubjectVisibilitySettings(subject.id);
   const t = theme();
+
   if(el('subject-stats-name')) el('subject-stats-name').textContent = subject.name;
+
   const total = getSubjectTotalQuestions(subject, { scope:'subject', respectVisibilitySettings:true });
   const answered = getSubjectAnsweredCount(subject, { scope:'subject', respectVisibilitySettings:true });
   const remaining = Math.max(0,total-answered);
   const pct = total > 0 ? Math.round((answered/total)*100) : 0;
+
   if(el('subject-stats-summary')){
     el('subject-stats-summary').innerHTML = `
       <div class="progress-card">
@@ -348,11 +362,21 @@ function renderSubjectStats(){
       </div>
     `;
   }
+
   const sections = [];
-  if(subject.lectures.length && !isSectionExcluded('lecture') && settings.lectures !== false) sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
-  if(subject.years.length && !isSectionExcluded('year') && settings.years !== false) sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
-  if(subject.ai.length && !isSectionExcluded('ai') && settings.ai !== false) sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الصناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
-  if(el('subject-stats-sections')) el('subject-stats-sections').innerHTML = sections.length ? sections.join('') : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حالياً.</p></div>';
+  if(subject.lectures.length && settings.lectures !== false){
+    sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
+  }
+  if(subject.years.length && settings.years !== false){
+    sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
+  }
+  if(subject.ai.length && settings.ai !== false){
+    sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الصناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
+  }
+
+  if(el('subject-stats-sections')){
+    el('subject-stats-sections').innerHTML = sections.length ? sections.join('') : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حاليًا.</p></div>';
+  }
 }
 function openSubjectCategoryFromStats(){ return; }
 function openSubjectStatsSettings(subjectId){
