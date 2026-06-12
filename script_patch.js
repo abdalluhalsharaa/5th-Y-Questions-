@@ -963,7 +963,7 @@
   #section-exclusions-list label{display:flex;align-items:center;gap:10px;width:100%}
     .subject-actions{display:none!important}
   .subject-card.actions-open .subject-actions{display:flex!important}
-  #exams-hint-bar{display:block!important}
+  #exams-hint-bar.hidden{display:none!important}
   #exam-screen .btn-home, #exam-screen .btn-home-global, #exam-screen [class*="home"], #exam-screen [id*="home"] { display: none !important; }
   `;
   document.head.appendChild(st);
