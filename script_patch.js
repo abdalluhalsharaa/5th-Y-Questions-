@@ -1155,21 +1155,36 @@
     }, 0);
   };
     const __origToggleFavoriteToastPatch = typeof toggleFavorite === 'function' ? toggleFavorite : null;
-  toggleFavorite = function(questionId){
-    const wasFavorite = state.favorites.includes(questionId);
+toggleFavorite = function(questionId){
+  const wasFavorite = state.favorites.includes(questionId);
 
-    if(__origToggleFavoriteToastPatch){
-      __origToggleFavoriteToastPatch(questionId);
-    }
+  if(__origToggleFavoriteToastPatch){
+    __origToggleFavoriteToastPatch(questionId);
+  }
 
-    const isFavorite = state.favorites.includes(questionId);
+  const isFavorite = state.favorites.includes(questionId);
+  const toast = el('toast');
+  if(!toast) return;
 
-    if(!wasFavorite && isFavorite){
-      showToast('تم إضافة هذا السؤال للمفضلة 💚', 'success', 2000);
-    }else if(wasFavorite && !isFavorite){
-      showToast('تم إزالة هذا السؤال من المفضلة 🤍', 'info', 2000);
-    }
-  };
+  let message = '';
+  if(!wasFavorite && isFavorite){
+    message = 'تم إضافة هذا السؤال للمفضلة 💚';
+  }else if(wasFavorite && !isFavorite){
+    message = 'تم إزالة هذا السؤال من المفضلة 🤍';
+  }else{
+    return;
+  }
+
+  clearTimeout(state.toastTimer);
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  toast.classList.add('visible');
+
+  state.toastTimer = setTimeout(() => {
+    toast.classList.remove('visible');
+    toast.classList.add('hidden');
+  }, 2000);
+};
   function ensureGlobalHomeButtons(){
     document.querySelectorAll('.screen').forEach(screen => {
       if(!screen || screen.id === 'home-screen' || screen.id === 'settings-screen') return;
