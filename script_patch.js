@@ -694,25 +694,20 @@
     }
 
     const sections = [];
+  if(subject.lectures.length && settings.lectures !== false){
+    sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
+  }
+  if(subject.years.length && settings.years !== false){
+    sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
+  }
+  if(subject.ai.length && settings.ai !== false){
+    sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الصناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
+  }
 
-    if(subject.lectures.length && settings.lectures !== false){
-      sections.push(renderSectionAnalyticsCard(subject,'lecture','المحاضرات',t.icons.lectures,getSectionAnalytics(subject,'lecture')));
-    }
-
-    if(subject.ai.length && settings.ai !== false){
-      sections.push(renderSectionAnalyticsCard(subject,'ai','الذكاء الصناعي',t.icons.ai,getSectionAnalytics(subject,'ai')));
-    }
-
-    if(subject.years.length && settings.years !== false){
-      sections.push(renderSectionAnalyticsCard(subject,'year','السنوات',t.icons.years,getSectionAnalytics(subject,'year')));
-    }
-
-    if(el('subject-stats-sections')){
-      el('subject-stats-sections').innerHTML = sections.length
-        ? sections.join('')
-        : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حاليًا.</p></div>';
-    }
-  };
+  if(el('subject-stats-sections')){
+    el('subject-stats-sections').innerHTML = sections.length ? sections.join('') : '<div class="empty-state"><p>لا توجد أقسام مرئية لهذه المادة حالياً.</p></div>';
+  }
+};
     const __origSaveProgressForAutoComplete = typeof saveProgress === 'function' ? saveProgress : null;
   saveProgress = function(){
     if(__origSaveProgressForAutoComplete) __origSaveProgressForAutoComplete();
