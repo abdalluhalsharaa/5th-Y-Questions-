@@ -791,7 +791,7 @@
     return `<button class="${cls}" onclick="selectOption(${i})"><span class="option-label">${LETTERS[i]})</span>${escapeHtml(cleanOptionDisplayLocal(opt))}</button>`;
   };
 
-      renderExam = function(){
+  renderExam = function(){
     if(!state.currentExam) return;
     const questions = state.currentExam.questions;
     const idx = state.currentExam.currentIndex;
@@ -824,24 +824,29 @@
     const correctIdx = getCorrectIndex(q);
     const showAnswerState = state.currentExam.mode === 'training' ? getTrainingShowAnswerState(state.currentExam, idx) : false;
     const fav = state.favorites.includes(q.id);
+    const favIcon = fav ? '🤍' : '💚';
     const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswerLocal(q))}</span></div>` : '';
 
     if(el('question-container')){
-      el('question-container').innerHTML = `<div class="question-header"><span class="question-number">Q${idx+1}</span><div class="question-actions"><button class="icon-btn ${fav?'active':''}" onclick="toggleFavorite('${q.id}')">💚</button><button class="icon-btn" onclick="toggleQuestionLocation()">${theme().icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${typeof renderRemoveWrongBtn === 'function' ? renderRemoveWrongBtn() : ''}`;
+      el('question-container').innerHTML = `<div class="question-header"><span class="question-number">Q${idx+1}</span><div class="question-actions"><button class="icon-btn favorite-heart-btn ${fav?'active':''}" data-question-id="${escapeAttribute(q.id)}" aria-pressed="${fav?'true':'false'}" title="${fav?'إزالة من المفضلة':'إضافة إلى المفضلة'}" onclick="toggleFavorite('${q.id}')">${favIcon}</button><button class="icon-btn" onclick="toggleQuestionLocation()">${theme().icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>renderOptionButton(opt,i,idx,showAnswerState,state.currentExam.answers[idx],correctIdx)).join('')}</div>${answerSummaryHtml}<div class="explanation-box ${showAnswerState?'visible':''}"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>${typeof renderRemoveWrongBtn === 'function' ? renderRemoveWrongBtn() : ''}`;
       el('question-container').classList.add('exam-content-ltr');
     }
 
+    refreshFavoriteButtonsUI();
     renderExamNav();
   };
-
-  openReadonly = function(questionId){
-    const q=state.allQuestions.find(item=>item.id===questionId);
+    openReadonly = function(questionId){
+    const q = state.allQuestions.find(item => item.id === questionId);
     if(!q) return;
-    const t=theme();
-    const correctIdx=getCorrectIndex(q);
+    const t = theme();
+    const correctIdx = getCorrectIndex(q);
+    const fav = state.favorites.includes(q.id);
+    const favIcon = fav ? '🤍' : '💚';
+
     showScreen('readonly-screen');
-    el('readonly-content').innerHTML=`<div class="question-header"><span class="question-number">Question ${escapeHtml(q.number||'?')}</span><div class="question-actions"><button class="icon-btn ${state.favorites.includes(q.id)?'active':''}" onclick="toggleFavorite('${q.id}'); openReadonly('${q.id}')">💚</button><button class="icon-btn" onclick="showLocation('${escapeJsString(q.subjectName)}','${escapeJsString(q.lectureName)}','${escapeJsString(q.batchName||'')}','${escapeJsString(q.number||'')}','${escapeJsString(q.pageNumber||'')}')">${t.icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>'<div class="option-btn '+(i===correctIdx?'correct':'')+'" style="cursor:default;"><span class="option-label">'+LETTERS[i]+')</span>'+escapeHtml(cleanOptionDisplayLocal(opt))+'</div>').join('')}</div><div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswerLocal(q))}</span></div><div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>`;
+    el('readonly-content').innerHTML = `<div class="question-header"><span class="question-number">Question ${escapeHtml(q.number||'?')}</span><div class="question-actions"><button class="icon-btn favorite-heart-btn ${fav?'active':''}" data-question-id="${escapeAttribute(q.id)}" aria-pressed="${fav?'true':'false'}" title="${fav?'إزالة من المفضلة':'إضافة إلى المفضلة'}" onclick="toggleFavorite('${q.id}'); openReadonly('${q.id}')">${favIcon}</button><button class="icon-btn" onclick="showLocation('${escapeJsString(q.subjectName)}','${escapeJsString(q.lectureName)}','${escapeJsString(q.batchName||'')}','${escapeJsString(q.number||'')}','${escapeJsString(q.pageNumber||'')}')">${t.icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>'<div class="option-btn '+(i===correctIdx?'correct':'')+'" style="cursor:default;"><span class="option-label">'+LETTERS[i]+')</span>'+escapeHtml(cleanOptionDisplayLocal(opt))+'</div>').join('')}</div><div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswerLocal(q))}</span></div><div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>`;
     el('readonly-content').classList.add('readonly-ltr');
+    refreshFavoriteButtonsUI();
   };
 
   reviewExam = function(){
@@ -1095,7 +1100,61 @@
     if(!exam || exam.mode !== 'training') return false;
     return !!exam.showAnswer || isTrainingQuestionSolved(exam, index);
   }
+  function findFavoriteButtonByQuestionId(questionId){
+    return Array.from(document.querySelectorAll('.favorite-heart-btn[data-question-id]')).find(btn => btn.dataset.questionId === String(questionId)) || null;
+  }
 
+  function refreshFavoriteButtonsUI(){
+    document.querySelectorAll('.favorite-heart-btn[data-question-id]').forEach(btn => {
+      const isFav = state.favorites.includes(btn.dataset.questionId);
+      btn.textContent = isFav ? '🤍' : '💚';
+      btn.classList.toggle('active', isFav);
+      btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+      btn.setAttribute('title', isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة');
+    });
+  }
+
+  function playFavoriteButtonBurst(button){
+    if(!button) return;
+
+    const colors = ['#22c55e', '#ffffff', '#86efac', '#ffffff', '#16a34a', '#ffffff'];
+    const particleCount = 10;
+
+    for(let i = 0; i < particleCount; i++){
+      const particle = document.createElement('span');
+      particle.className = 'favorite-burst-particle';
+      particle.style.background = colors[i % colors.length];
+
+      const angle = (Math.PI * 2 * i) / particleCount;
+      const distance = 8 + (i % 3) * 4;
+      const dx = Math.cos(angle) * distance;
+      const dy = Math.sin(angle) * distance;
+
+      particle.style.setProperty('--fav-burst-x', `${dx}px`);
+      particle.style.setProperty('--fav-burst-y', `${dy}px`);
+
+      button.appendChild(particle);
+
+      setTimeout(() => {
+        try{ particle.remove(); }catch(e){}
+      }, 320);
+    }
+  }
+
+  const __origToggleFavoriteVisualPatch = typeof toggleFavorite === 'function' ? toggleFavorite : null;
+  toggleFavorite = function(questionId){
+    const willAdd = !state.favorites.includes(questionId);
+
+    if(__origToggleFavoriteVisualPatch){
+      __origToggleFavoriteVisualPatch(questionId);
+    }
+
+    setTimeout(() => {
+      const btn = findFavoriteButtonByQuestionId(questionId);
+      if(willAdd && btn) playFavoriteButtonBurst(btn);
+      refreshFavoriteButtonsUI();
+    }, 0);
+  };
   function ensureGlobalHomeButtons(){
     document.querySelectorAll('.screen').forEach(screen => {
       if(!screen || screen.id === 'home-screen' || screen.id === 'settings-screen') return;
@@ -1709,7 +1768,77 @@
   `;
   document.head.appendChild(st);
 
+  const favoriteFxStyle = document.createElement('style');
+  favoriteFxStyle.id = 'medical-app-favorite-fx-style';
+  favoriteFxStyle.textContent = `
+  .favorite-heart-btn{
+    position:relative;
+    overflow:visible;
+  }
 
+  .favorite-heart-btn.active{
+    box-shadow:0 0 0 1px rgba(255,255,255,.16),0 0 12px rgba(34,197,94,.22);
+  }
+
+  .favorite-burst-particle{
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:6px;
+    height:6px;
+    margin-left:-3px;
+    margin-top:-3px;
+    border-radius:999px;
+    pointer-events:none;
+    opacity:1;
+    transform:translate(0,0) scale(.25);
+    animation:favoriteBurstParticle .3s ease-out forwards;
+    box-shadow:0 0 6px rgba(255,255,255,.45);
+  }
+
+  @keyframes favoriteBurstParticle{
+    0%{
+      opacity:1;
+      transform:translate(0,0) scale(.25);
+    }
+    100%{
+      opacity:0;
+      transform:translate(var(--fav-burst-x),var(--fav-burst-y)) scale(1);
+    }
+  }
+
+  [data-theme="default"][data-dark="true"] .grid-btn{
+    background:rgba(17,24,39,.92)!important;
+    color:var(--text)!important;
+    border:1px solid var(--border)!important;
+  }
+
+  [data-theme="default"][data-dark="true"] .grid-btn.current{
+    background:var(--button-gradient)!important;
+    color:#ffffff!important;
+    border:2px solid rgba(255,255,255,.78)!important;
+    box-shadow:0 0 0 1px rgba(96,165,250,.28),0 0 14px rgba(96,165,250,.18)!important;
+  }
+
+  [data-theme="default"][data-dark="true"] .grid-btn.answered{
+    background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 70%,#ffffff 30%))!important;
+    color:#ffffff!important;
+    border:2px solid color-mix(in srgb,var(--success) 60%,#ffffff 40%)!important;
+    box-shadow:0 0 12px rgba(16,185,129,.16)!important;
+  }
+
+  [data-theme="default"][data-dark="true"] .grid-btn.wrong{
+    background:linear-gradient(135deg,var(--danger),color-mix(in srgb,var(--danger) 70%,#ffffff 30%))!important;
+    color:#ffffff!important;
+    border:2px solid color-mix(in srgb,var(--danger) 60%,#ffffff 40%)!important;
+    box-shadow:0 0 12px rgba(239,68,68,.16)!important;
+  }
+
+  [data-theme="default"][data-dark="true"] .grid-btn.disabled{
+    opacity:.4!important;
+  }
+  `;
+  document.head.appendChild(favoriteFxStyle);
   window.addEventListener('beforeunload', () => {
     try{
       const audio = el('bg-audio');
@@ -1765,4 +1894,7 @@
 })();
 document.addEventListener('DOMContentLoaded', function(){
   prepareSecondsAudio().catch(()=>{});
+});
+document.addEventListener('DOMContentLoaded', function(){
+  refreshFavoriteButtonsUI();
 });
