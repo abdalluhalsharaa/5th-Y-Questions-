@@ -791,7 +791,7 @@
     return `<button class="${cls}" onclick="selectOption(${i})"><span class="option-label">${LETTERS[i]})</span>${escapeHtml(cleanOptionDisplayLocal(opt))}</button>`;
   };
 
-  renderExam = function(){
+    renderExam = function(){
     if(!state.currentExam) return;
     const questions = state.currentExam.questions;
     const idx = state.currentExam.currentIndex;
@@ -824,7 +824,7 @@
     const correctIdx = getCorrectIndex(q);
     const showAnswerState = state.currentExam.mode === 'training' ? getTrainingShowAnswerState(state.currentExam, idx) : false;
     const fav = state.favorites.includes(q.id);
-    const favIcon = fav ? '🤍' : '💚';
+    const favIcon = fav ? '💚' : '♡';
     const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswerLocal(q))}</span></div>` : '';
 
     if(el('question-container')){
@@ -835,20 +835,19 @@
     refreshFavoriteButtonsUI();
     renderExamNav();
   };
-    openReadonly = function(questionId){
+  openReadonly = function(questionId){
     const q = state.allQuestions.find(item => item.id === questionId);
     if(!q) return;
     const t = theme();
     const correctIdx = getCorrectIndex(q);
     const fav = state.favorites.includes(q.id);
-    const favIcon = fav ? '🤍' : '💚';
+    const favIcon = fav ? '💚' : '♡';
 
     showScreen('readonly-screen');
     el('readonly-content').innerHTML = `<div class="question-header"><span class="question-number">Question ${escapeHtml(q.number||'?')}</span><div class="question-actions"><button class="icon-btn favorite-heart-btn ${fav?'active':''}" data-question-id="${escapeAttribute(q.id)}" aria-pressed="${fav?'true':'false'}" title="${fav?'إزالة من المفضلة':'إضافة إلى المفضلة'}" onclick="toggleFavorite('${q.id}'); openReadonly('${q.id}')">${favIcon}</button><button class="icon-btn" onclick="showLocation('${escapeJsString(q.subjectName)}','${escapeJsString(q.lectureName)}','${escapeJsString(q.batchName||'')}','${escapeJsString(q.number||'')}','${escapeJsString(q.pageNumber||'')}')">${t.icons.location}</button></div></div><p class="question-text">${escapeHtml(q.text)}</p><div class="options-list">${q.options.map((opt,i)=>'<div class="option-btn '+(i===correctIdx?'correct':'')+'" style="cursor:default;"><span class="option-label">'+LETTERS[i]+')</span>'+escapeHtml(cleanOptionDisplayLocal(opt))+'</div>').join('')}</div><div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswerLocal(q))}</span></div><div class="explanation-box visible"><strong>Explanation:</strong> ${escapeHtml(q.explanation||'No explanation available.')}</div>`;
     el('readonly-content').classList.add('readonly-ltr');
     refreshFavoriteButtonsUI();
   };
-
   reviewExam = function(){
     if(!state.currentExam) return;
     const reviewDiv=el('results-review');
@@ -1107,7 +1106,7 @@
   function refreshFavoriteButtonsUI(){
     document.querySelectorAll('.favorite-heart-btn[data-question-id]').forEach(btn => {
       const isFav = state.favorites.includes(btn.dataset.questionId);
-      btn.textContent = isFav ? '🤍' : '💚';
+      btn.textContent = isFav ? '💚' : '♡';
       btn.classList.toggle('active', isFav);
       btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
       btn.setAttribute('title', isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة');
@@ -1154,6 +1153,22 @@
       if(willAdd && btn) playFavoriteButtonBurst(btn);
       refreshFavoriteButtonsUI();
     }, 0);
+  };
+    const __origToggleFavoriteToastPatch = typeof toggleFavorite === 'function' ? toggleFavorite : null;
+  toggleFavorite = function(questionId){
+    const wasFavorite = state.favorites.includes(questionId);
+
+    if(__origToggleFavoriteToastPatch){
+      __origToggleFavoriteToastPatch(questionId);
+    }
+
+    const isFavorite = state.favorites.includes(questionId);
+
+    if(!wasFavorite && isFavorite){
+      showToast('تم إضافة هذا السؤال للمفضلة 💚', 'success', 2000);
+    }else if(wasFavorite && !isFavorite){
+      showToast('تم إزالة هذا السؤال من المفضلة 🤍', 'info', 2000);
+    }
   };
   function ensureGlobalHomeButtons(){
     document.querySelectorAll('.screen').forEach(screen => {
