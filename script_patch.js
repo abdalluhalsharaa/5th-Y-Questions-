@@ -1343,39 +1343,109 @@ toggleFavorite = function(questionId){
 
   /* iOS exam toggles: reinforce immediate user-gesture behavior inside exam */
 
-  function hookExamAudioTogglesForIOS(){
+    function hookExamAudioTogglesForIOS(){
     const bgExam = el('exam-bg-sound-enabled-toggle');
     const feedbackExam = el('exam-feedback-toggle');
     const soundSelectExam = el('exam-sound-selector');
 
+    function commitExamBgToggle(source){
+      if(!source) return;
+      state.audioUnlocked = true;
+      state.settings.bgSoundEnabled = !!source.checked;
+      saveSettings();
+      applySettings();
+      if(el('bg-sound-enabled-toggle')) el('bg-sound-enabled-toggle').checked = !!source.checked;
+      if(el('exam-bg-sound-enabled-toggle')) el('exam-bg-sound-enabled-toggle').checked = !!source.checked;
+    }
+
+    function commitExamFeedbackToggle(source){
+      if(!source) return;
+      state.audioUnlocked = true;
+      state.settings.feedbackEnabled = !!source.checked;
+      saveSettings();
+      applySettings();
+      if(el('feedback-toggle')) el('feedback-toggle').checked = !!source.checked;
+      if(el('exam-feedback-toggle')) el('exam-feedback-toggle').checked = !!source.checked;
+    }
+
+    function commitExamSoundSelect(source){
+      if(!source) return;
+      state.audioUnlocked = true;
+      state.settings.bgSound = BACKGROUND_SOUNDS[source.value] ? source.value : 'none';
+      saveSettings();
+      applySettings();
+      if(el('sound-selector')) el('sound-selector').value = state.settings.bgSound;
+      if(el('exam-sound-selector')) el('exam-sound-selector').value = state.settings.bgSound;
+    }
+
     if(bgExam && !bgExam.dataset.iosPatched){
       bgExam.dataset.iosPatched = '1';
-      bgExam.addEventListener('change', () => {
-        state.audioUnlocked = true;
-        if(typeof toggleBackgroundSoundEnabled === 'function') toggleBackgroundSoundEnabled();
+
+      bgExam.addEventListener('input', function(e){
+        commitExamBgToggle(e.currentTarget);
       });
-      bgExam.addEventListener('click', () => { state.audioUnlocked = true; });
-      bgExam.addEventListener('touchstart', () => { state.audioUnlocked = true; }, { passive:true });
+
+      bgExam.addEventListener('change', function(e){
+        commitExamBgToggle(e.currentTarget);
+      });
+
+      bgExam.addEventListener('click', function(){
+        state.audioUnlocked = true;
+      });
+
+      bgExam.addEventListener('touchstart', function(){
+        state.audioUnlocked = true;
+      }, { passive:true });
+
+      bgExam.addEventListener('touchend', function(){
+        state.audioUnlocked = true;
+        commitExamBgToggle(bgExam);
+      }, { passive:true });
     }
 
     if(feedbackExam && !feedbackExam.dataset.iosPatched){
       feedbackExam.dataset.iosPatched = '1';
-      feedbackExam.addEventListener('change', () => {
-        state.audioUnlocked = true;
-        if(typeof toggleFeedbackSounds === 'function') toggleFeedbackSounds();
+
+      feedbackExam.addEventListener('input', function(e){
+        commitExamFeedbackToggle(e.currentTarget);
       });
-      feedbackExam.addEventListener('click', () => { state.audioUnlocked = true; });
-      feedbackExam.addEventListener('touchstart', () => { state.audioUnlocked = true; }, { passive:true });
+
+      feedbackExam.addEventListener('change', function(e){
+        commitExamFeedbackToggle(e.currentTarget);
+      });
+
+      feedbackExam.addEventListener('click', function(){
+        state.audioUnlocked = true;
+      });
+
+      feedbackExam.addEventListener('touchstart', function(){
+        state.audioUnlocked = true;
+      }, { passive:true });
+
+      feedbackExam.addEventListener('touchend', function(){
+        state.audioUnlocked = true;
+        commitExamFeedbackToggle(feedbackExam);
+      }, { passive:true });
     }
 
     if(soundSelectExam && !soundSelectExam.dataset.iosPatched){
       soundSelectExam.dataset.iosPatched = '1';
-      soundSelectExam.addEventListener('change', () => {
-        state.audioUnlocked = true;
-        if(typeof changeSound === 'function') changeSound(soundSelectExam.value);
+
+      soundSelectExam.addEventListener('input', function(e){
+        commitExamSoundSelect(e.currentTarget);
       });
-      soundSelectExam.addEventListener('click', () => { state.audioUnlocked = true; });
-      soundSelectExam.addEventListener('touchstart', () => { state.audioUnlocked = true; }, { passive:true });
+
+      soundSelectExam.addEventListener('change', function(e){
+        commitExamSoundSelect(e.currentTarget);
+      });
+
+      soundSelectExam.addEventListener('click', function(){
+        state.audioUnlocked = true;
+      });
+
+      soundSelectExam.addEventListener('touchstart', function(){
+        state.audioUnlocked = true;
+      }, { passive:true });
     }
   }
   function isMemoryDarkSingleLineTheme(){
