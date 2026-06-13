@@ -791,7 +791,7 @@
     return `<button class="${cls}" onclick="selectOption(${i})"><span class="option-label">${LETTERS[i]})</span>${escapeHtml(cleanOptionDisplayLocal(opt))}</button>`;
   };
 
-    renderExam = function(){
+      renderExam = function(){
     if(!state.currentExam) return;
     const questions = state.currentExam.questions;
     const idx = state.currentExam.currentIndex;
@@ -816,9 +816,13 @@
       if(timerEl) timerEl.classList.remove('hidden');
     }
 
+    if(state.currentExam.mode === 'training'){
+      state.currentExam.showAnswer = getTrainingShowAnswerState(state.currentExam, idx);
+    }
+
     renderGrid();
     const correctIdx = getCorrectIndex(q);
-    const showAnswerState = state.currentExam.mode === 'training' && state.currentExam.showAnswer;
+    const showAnswerState = state.currentExam.mode === 'training' ? getTrainingShowAnswerState(state.currentExam, idx) : false;
     const fav = state.favorites.includes(q.id);
     const answerSummaryHtml = showAnswerState ? `<div class="answer-summary"><strong>Correct Answer:</strong> <span class="answer-value">${escapeHtml(getFormattedCurrentCorrectAnswerLocal(q))}</span></div>` : '';
 
@@ -857,7 +861,91 @@
     });
     reviewDiv.innerHTML=html;
   };
+  renderExamNav = function(){
+    if(!state.currentExam) return;
+    const nav = el('exam-nav');
+    const idx = state.currentExam.currentIndex;
+    const last = state.currentExam.questions.length - 1;
+    let prevBtn = '<span></span>';
+    let nextBtn = '<span></span>';
 
+    if(state.currentExam.direction === 'twoway' && idx > 0){
+      prevBtn = '<button class="btn-secondary" onclick="prevQuestion()">Previous ←</button>';
+    }
+
+    if(state.currentExam.mode === 'training'){
+      const solved = isTrainingQuestionSolved(state.currentExam, idx);
+      const showAnswerState = getTrainingShowAnswerState(state.currentExam, idx);
+
+      if(showAnswerState || solved){
+        nextBtn = idx < last
+          ? '<button class="btn-primary" onclick="nextQuestion()">Next →</button>'
+          : '<button class="btn-primary" onclick="finishExam()">Finish</button>';
+      } else if(state.currentExam.answers[idx] !== null){
+        nextBtn = '<button class="btn-small" onclick="showAnswer()">Show Answer</button>';
+      }
+    } else if(state.currentExam.answers[idx] !== null){
+      nextBtn = idx < last
+        ? '<button class="btn-primary" onclick="nextQuestion()">Next →</button>'
+        : '<button class="btn-primary" onclick="finishExam()">Finish</button>';
+    }
+
+    nav.innerHTML = prevBtn + nextBtn;
+  };
+
+  nextQuestion = function(){
+    if(!state.currentExam) return;
+    if(state.currentExam.currentIndex < state.currentExam.questions.length - 1){
+      state.currentExam.currentIndex += 1;
+      if(state.currentExam.mode === 'training'){
+        state.currentExam.showAnswer = isTrainingQuestionSolved(state.currentExam, state.currentExam.currentIndex);
+      } else {
+        state.currentExam.showAnswer = false;
+      }
+      saveExamState();
+      renderExam();
+      scrollQuestionIntoView(true);
+    }
+  };
+
+  prevQuestion = function(){
+    if(!state.currentExam || state.currentExam.direction !== 'twoway') return;
+    if(state.currentExam.currentIndex > 0){
+      state.currentExam.currentIndex -= 1;
+      if(state.currentExam.mode === 'training'){
+        state.currentExam.showAnswer = isTrainingQuestionSolved(state.currentExam, state.currentExam.currentIndex);
+      }
+      saveExamState();
+      renderExam();
+      scrollQuestionIntoView(true);
+    }
+  };
+
+  navigateToQuestion = function(index){
+    if(!state.currentExam) return;
+    if(state.currentExam.direction === 'oneway' && index !== state.currentExam.currentIndex) return;
+    state.currentExam.currentIndex = index;
+    if(state.currentExam.mode === 'training'){
+      state.currentExam.showAnswer = isTrainingQuestionSolved(state.currentExam, index);
+    }
+    saveExamState();
+    renderExam();
+    scrollQuestionIntoView(true);
+  };
+
+  showAnswer = function(){
+    if(!state.currentExam) return;
+    state.currentExam.showAnswer = true;
+    const idx = state.currentExam.currentIndex;
+    const q = state.currentExam.questions[idx];
+    const ans = state.currentExam.firstAnswers[idx];
+    if(ans !== null && !isAnswerCorrect(q, ans) && !state.wrongQuestions.includes(q.id)){
+      state.wrongQuestions.push(q.id);
+      saveWrongQuestions();
+    }
+    saveExamState();
+    renderExam();
+  };
   /* years exclusion remains hidden as in previous patch */
   openStatsExclusionDialog = (function(original){
     return function(){
@@ -912,6 +1000,100 @@
 
   function getHomeButtonText(){
     return `${getThemeHomeIcon()} Home`;
+  }
+  const __origPlayCelebrateSoundPatch = typeof playCelebrateSound === 'function' ? playCelebrateSound : null;
+  playCelebrateSound = function(){
+    if(state.settings && state.settings.feedbackEnabled === false) return;
+    if(__origPlayCelebrateSoundPatch) __origPlayCelebrateSoundPatch();
+  };
+
+  const __origApplyEffectAudioVolumesPatch = typeof applyEffectAudioVolumes === 'function' ? applyEffectAudioVolumes : null;
+  applyEffectAudioVolumes = function(){
+    if(__origApplyEffectAudioVolumesPatch) __origApplyEffectAudioVolumesPatch();
+    const secondsAudio = el('seconds-audio');
+    if(secondsAudio) secondsAudio.volume = (state.settings.volume || 50) / 100;
+  };
+
+  async function prepareSecondsAudio(){
+    let secondsAudio = el('seconds-audio');
+    if(!secondsAudio){
+      secondsAudio = document.createElement('audio');
+      secondsAudio.id = 'seconds-audio';
+      secondsAudio.preload = 'auto';
+      document.body.appendChild(secondsAudio);
+    }
+    const src = await resolveAssetPath(['seconds.mp3','audio/seconds.mp3','assets/audio/seconds.mp3']);
+    if(secondsAudio.dataset.currentSrc !== src){
+      secondsAudio.src = src;
+      secondsAudio.dataset.currentSrc = src;
+      secondsAudio.load();
+    }
+    secondsAudio.volume = (state.settings.volume || 50) / 100;
+  }
+
+  function playSecondsAlertSound(){
+    if(!state.currentExam || state.currentExam.mode !== 'exam') return;
+    if(state.settings && state.settings.feedbackEnabled === false) return;
+    const secondsAudio = el('seconds-audio');
+    if(!secondsAudio || !secondsAudio.src) return;
+    try{
+      secondsAudio.currentTime = 0;
+      secondsAudio.volume = (state.settings.volume || 50) / 100;
+      secondsAudio.play().catch(()=>{});
+    }catch(e){}
+  }
+
+  const __origStartTimerPatch = typeof startTimer === 'function' ? startTimer : null;
+  startTimer = function(){
+    clearInterval(state.timerInterval);
+    const timerEl = el('exam-timer');
+    if(timerEl) timerEl.classList.remove('hidden');
+    state.secondsAlertPlayed = false;
+
+    state.timerInterval = setInterval(() => {
+      if(!state.currentExam || state.currentExam.submitted){
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+        return;
+      }
+
+      const elapsed = Date.now() - state.currentExam.startTime;
+      const remaining = state.currentExam.totalTime - elapsed;
+
+      if(remaining <= 0){
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+        timeUp();
+        return;
+      }
+
+      const wholeSecondsRemaining = Math.ceil(remaining / 1000);
+
+      if(!state.secondsAlertPlayed && wholeSecondsRemaining === 11){
+        state.secondsAlertPlayed = true;
+        playSecondsAlertSound();
+      }
+
+      let mins = Math.floor(remaining / 60000);
+      let secs = Math.floor((remaining % 60000) / 1000);
+
+      if(timerEl){
+        timerEl.textContent = mins + ':' + String(secs).padStart(2,'0');
+        timerEl.classList.toggle('timer-danger', remaining <= 60000);
+      }
+    }, 250);
+  };
+
+  function isTrainingQuestionSolved(exam, index){
+    if(!exam || exam.mode !== 'training') return false;
+    const q = exam.questions[index];
+    const answer = exam.answers[index];
+    return answer !== null && typeof q !== 'undefined' && isAnswerCorrect(q, answer);
+  }
+
+  function getTrainingShowAnswerState(exam, index){
+    if(!exam || exam.mode !== 'training') return false;
+    return !!exam.showAnswer || isTrainingQuestionSolved(exam, index);
   }
 
   function ensureGlobalHomeButtons(){
@@ -1581,3 +1763,6 @@
     }, { passive:true, capture:true });
   });
 })();
+document.addEventListener('DOMContentLoaded', function(){
+  prepareSecondsAudio().catch(()=>{});
+});
